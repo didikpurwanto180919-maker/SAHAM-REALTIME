@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import datetime
 from sklearn.linear_model import LinearRegression
-from streamlit_autorefresh import st_autorefresh
+import streamlit.components.v1 as components
 
 # Konfigurasi Halaman Streamlit
 st.set_page_config(
@@ -12,9 +12,17 @@ st.set_page_config(
     layout="wide"
 )
 
-# Konfigurasi Auto-Refresh Setiap 60 Detik (60000 milidetik)
-# Fitur ini membuat halaman memperbarui data secara otomatis di background
-count = st_autorefresh(interval=60000, limit=None, key="realtime_stock_counter")
+# Script Auto-Refresh Bawaan (Tanpa Pustaka Eksternal)
+components.html(
+    """
+    <script>
+        setTimeout(function(){
+            window.location.reload();
+        }, 60000); // Refresh setiap 60 detik
+    </script>
+    """,
+    height=0,
+)
 
 st.title("🤖 AI & Machine Learning: Prediksi Harga Saham IDX 3 Hari Kedepan")
 st.markdown(
