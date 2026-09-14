@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import datetime
 from sklearn.linear_model import LinearRegression
+from streamlit_autorefresh import st_autorefresh
 
 # Konfigurasi Halaman Streamlit
 st.set_page_config(
@@ -11,14 +12,18 @@ st.set_page_config(
     layout="wide"
 )
 
+# Konfigurasi Auto-Refresh Setiap 60 Detik (60000 milidetik)
+# Fitur ini membuat halaman memperbarui data secara otomatis di background
+count = st_autorefresh(interval=60000, limit=None, key="realtime_stock_counter")
+
 st.title("🤖 AI & Machine Learning: Prediksi Harga Saham IDX 3 Hari Kedepan")
 st.markdown(
     "Dashboard analisis prediktif berbasis *Machine Learning* untuk proyeksi kenaikan harga saham Indonesia 3 hari ke depan, "
-    "terintegrasi dengan **Yahoo Finance**, **IDX**, **TradingView**, dan **Investing.com**."
+    "terintegrasi dengan **Yahoo Finance**, **IDX**, **TradingView**, dan **Investing.com**. *(Auto-refresh aktif)*"
 )
 
 # Daftar emiten utama / Blue Chip IDX
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=30)
 def get_idx_universe():
     return [
         "BBCA.JK", "BBRI.JK", "BMRI.JK", "BBNI.JK", "TLKM.JK", 
@@ -38,12 +43,12 @@ custom_ticker = st.sidebar.text_input("Atau Ketik Kode Saham (contoh: BBCA):", v
 # Pilihan Interval Waktu
 timeframe_option = st.sidebar.selectbox(
     "Pilih Interval Grafik:", 
-    ["1 Hari (Daily - 2 Bulan)", "1 Jam (Hourly - 1 Bulan)"]
+    ["1 Hari (Daily - 60 Hari)", "1 Jam (Hourly - 1 Bulan)"]
 )
 
 if "1 Hari" in timeframe_option:
     interval_val = "1d"
-    period_val = "60d" # Diperpendek agar sinkronisasi data harian lebih akurat
+    period_val = "60d"
 else:
     interval_val = "1h"
     period_val = "1mo"
@@ -52,23 +57,24 @@ target_ticker = custom_ticker.strip().upper() if custom_ticker.strip() else sele
 if not target_ticker.endswith(".JK") and target_ticker:
     target_ticker += ".JK"
 
-if st.sidebar.button("🔄 Perbarui & Prediksi Ulang"):
+if st.sidebar.button("🔄 Perbarui & Prediksi Ulang Sekarang"):
     st.cache_data.clear()
     st.rerun()
 
-# Fungsi Mengambil Data Historis dengan Cache Tanggal Terkini
+# Fungsi Mengambil Data Historis dengan Cache Waktu Singkat
 current_date_str = str(datetime.date.today())
+current_time_str = datetime.datetime.now().strftime("%H:%M:%S")
 
-@st.cache_data(ttl=30) # TTL dipercepat menjadi 30 detik untuk penyegaran data real-time
-def fetch_stock_data(ticker, period, interval, date_str):
+@st.cache_data(ttl=15)
+def fetch_stock_data(ticker, period, interval):
     stock = yf.Ticker(ticker)
     df = stock.history(period=period, interval=interval, auto_adjust=True)
     info = stock.info
     return df, info
 
 try:
-    with st.spinner(f"Menarik data real-time hingga {current_date_str} untuk {target_ticker}..."):
-        df, info = fetch_stock_data(target_ticker, period_val, interval_val, current_date_str)
+    with st.spinner(f"Menarik data real-time untuk {target_ticker}..."):
+        df, info = fetch_stock_data(target_ticker, period_val, interval_val)
         
     if not df.empty:
         # Menghapus zona waktu pada index agar grafik Streamlit merender tanggal dengan bersih
@@ -123,7 +129,7 @@ try:
         comparison_chart = ml_df[['Close', 'Predicted_Price']]
         comparison_chart.columns = ['Harga Aktual (Real-Time)', 'Prediksi Model ML (3 Hari)']
         st.line_chart(comparison_chart, use_container_width=True)
-        st.caption(f"Data diperbarui secara real-time hingga tanggal {current_date_str}.")
+        st.caption(f"Pembaruan otomatis terakhir pada tanggal {current_date_str} pukul {current_time_str} WIB.")
 
     else:
         st.warning("Data saham tidak ditemukan atau pasar sedang tutup.")
