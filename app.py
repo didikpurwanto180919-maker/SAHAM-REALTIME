@@ -54,22 +54,19 @@ try:
         df, info = fetch_stock_data(target_ticker)
         
     if not df.empty:
-        # Penyiapan Fitur Machine Learning (Regresi Linier untuk Prediksi Tren Harga)
-        df['Prediction_Target'] = df['Close'].shift(-1) # Target harga hari berikutnya
+        # Penyiapan Fitur Machine Learning (Regresi Linier)
+        df['Prediction_Target'] = df['Close'].shift(-1)
         df['MA5'] = df['Close'].rolling(window=5).mean()
         df['MA20'] = df['Close'].rolling(window=20).mean()
         
-        # Bersihkan NaN
         ml_df = df.dropna().copy()
         
         X = ml_df[['MA5', 'MA20', 'Volume']]
         y = ml_df['Prediction_Target']
         
-        # Latih Model Machine Learning
         model = LinearRegression()
         model.fit(X, y)
         
-        # Prediksi untuk seluruh dataset historis guna visualisasi perbandingan
         ml_df['Predicted_Price'] = model.predict(X)
         
         current_price = df['Close'].iloc[-1]
@@ -77,7 +74,6 @@ try:
         change = current_price - prev_close
         pct_change = (change / prev_close) * 100 if prev_close else 0
 
-        # Prediksi Harga untuk Hari Kerja Berikutnya
         latest_features = pd.DataFrame({
             'MA5': [df['Close'].rolling(window=5).mean().iloc[-1]],
             'MA20': [df['Close'].rolling(window=20).mean().iloc[-1]],
@@ -96,16 +92,16 @@ try:
         # Kotak Analisis Sinyal Berbasis ML
         st.subheader("💡 Sinyal Keputusan Swing Trading Berbasis AI")
         if next_day_pred > current_price:
-            st.success(f"**Sinyal AI: BUY / BULLISH** - Model Machine Learning memproyeksikan kenaikan harga ke level Rp {next_day_pred:,.2f} pada periode perdagangan berikutnya.")
+            st.success(f"**Sinyal AI: BUY / BULLISH** - Model Machine Learning memproyeksikan kenaikan harga ke level Rp {next_day_pred:,.2f} pada sesi perdagangan berikutnya.")
         else:
             st.warning(f"**Sinyal AI: CAUTION / BEARISH** - Model Machine Learning memproyeksikan potensi koreksi harga menuju level Rp {next_day_pred:,.2f}.")
 
-        # Grafik Perbandingan Harga Real-time vs Prediksi Machine Learning
+        # Grafik Perbandingan
         st.subheader(f"📊 Grafik Perbandingan: Harga Real-Time (Aktual) vs Prediksi AI ({target_ticker})")
         comparison_chart = ml_df[['Close', 'Predicted_Price']]
         comparison_chart.columns = ['Harga Aktual (Real-Time)', 'Prediksi Model ML']
         st.line_chart(comparison_chart, use_container_width=True)
-        st.caption("Garis biru menunjukkan pergerakan harga riwayat asli di pasar, sedangkan garis merah/oranye menunjukkan garis prediksi dari algoritma Machine Learning.")
+        st.caption("Garis biru menunjukkan pergerakan harga riwayat asli di pasar, sedangkan garis oranye menunjukkan garis prediksi dari algoritma Machine Learning.")
 
     else:
         st.warning("Data saham tidak ditemukan.")
@@ -165,7 +161,7 @@ if st.button("🚀 Jalankan Screener Saham Potensial"):
             st.success(f"Ditemukan {len(screener_df)} emiten yang memenuhi kriteria pantauan jangka pendek.")
             st.dataframe(screener_df, use_container_width=True)
         else:
-            st.info("Tidak ada emiten liquid yang masuk kriteria ketat saat ini. Pasar mungkin sedang dalam tren naik kuat atau konsolidasi.")
+            st.info("Tidak ada emiten liquid yang masuk kriteria ketat saat ini.")
 
 
 # Tautan Cek Platform Eksternal
