@@ -40,7 +40,6 @@ def get_idx_universe():
         tickers = [str(code).strip().upper() + ".JK" for code in df_emiten['Code'].dropna().unique()]
         return sorted(tickers)
     except Exception:
-        # Fallback cadangan jika koneksi gagal
         return [
             "BBCA.JK", "BBRI.JK", "BMRI.JK", "BBNI.JK", "TLKM.JK", 
             "ASII.JK", "UNVR.JK", "ICBP.JK", "INDF.JK", "GOTO.JK", 
@@ -94,7 +93,6 @@ try:
         df, info = fetch_stock_data(target_ticker, period_val, interval_val)
         
     if not df.empty:
-        # Menghapus zona waktu pada index agar grafik merender tanggal dengan bersih
         if df.index.tz is not None:
             df.index = df.index.tz_localize(None)
 
@@ -141,7 +139,7 @@ try:
         else:
             st.warning(f"**Sinyal AI: CAUTION / BEARISH** - Model Machine Learning memproyeksikan potensi koreksi harga menuju level Rp {three_day_pred:,.2f} dalam 3 hari ke depan.")
 
-        # --- GRAFIK PLOTLY DENGAN PROYEKSI MASA DEPAN 3 HARI ---
+        # --- GRAFIK PLOTLY DENGAN PROYEKSI 3 TITIK HARI KE DEPAN ---
         st.subheader(f"📊 Grafik Perbandingan & Proyeksi Harga 3 Hari Kedepan ({target_ticker})")
         
         last_date = df.index[-1]
@@ -149,6 +147,13 @@ try:
             future_dates = pd.bdate_range(start=last_date + pd.Timedelta(days=1), periods=3)
         else:
             future_dates = pd.date_range(start=last_date + pd.Timedelta(hours=1), periods=3, freq='h')
+
+        # Membentuk 3 tahapan titik harga (Hari 1, Hari 2, Hari 3) secara progresif
+        step_diff = (three_day_pred - current_price) / 3
+        future_prices = [current_price + step_diff * i for i in range(1, 4)]
+        
+        projection_x = [last_date] + list(future_dates)
+        projection_y = [current_price] + future_prices
 
         fig = go.Figure()
         
@@ -161,10 +166,7 @@ try:
             line=dict(color='#1f77b4', width=2)
         ))
         
-        # 2. Garis Proyeksi Masa Depan (Menghubungkan harga terakhir ke titik prediksi 3 hari ke depan)
-        projection_x = [last_date, future_dates[-1]]
-        projection_y = [current_price, three_day_pred]
-        
+        # 2. Garis Proyeksi Masa Depan (3 Titik Berurutan)
         fig.add_trace(go.Scatter(
             x=projection_x, 
             y=projection_y, 
