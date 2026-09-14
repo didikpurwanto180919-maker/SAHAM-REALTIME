@@ -35,15 +35,15 @@ st.sidebar.header("🔍 Pengaturan Model ML & Data")
 selected_target = st.sidebar.selectbox("Pilih Emiten Populer:", all_tickers)
 custom_ticker = st.sidebar.text_input("Atau Ketik Kode Saham (contoh: BBCA):", value="")
 
-# Pilihan Interval Waktu untuk Real-Time / Intraday
+# Pilihan Interval Waktu
 timeframe_option = st.sidebar.selectbox(
     "Pilih Interval Grafik:", 
-    ["1 Hari (Daily - 6 Bulan)", "1 Jam (Hourly - 1 Bulan)"]
+    ["1 Hari (Daily - 2 Bulan)", "1 Jam (Hourly - 1 Bulan)"]
 )
 
 if "1 Hari" in timeframe_option:
     interval_val = "1d"
-    period_val = "6mo"
+    period_val = "60d" # Diperpendek agar sinkronisasi data harian lebih akurat
 else:
     interval_val = "1h"
     period_val = "1mo"
@@ -56,10 +56,10 @@ if st.sidebar.button("🔄 Perbarui & Prediksi Ulang"):
     st.cache_data.clear()
     st.rerun()
 
-# Fungsi Mengambil Data Historis / Real-Time dengan Cache Berbasis Tanggal Hari Ini
+# Fungsi Mengambil Data Historis dengan Cache Tanggal Terkini
 current_date_str = str(datetime.date.today())
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30) # TTL dipercepat menjadi 30 detik untuk penyegaran data real-time
 def fetch_stock_data(ticker, period, interval, date_str):
     stock = yf.Ticker(ticker)
     df = stock.history(period=period, interval=interval, auto_adjust=True)
@@ -67,7 +67,7 @@ def fetch_stock_data(ticker, period, interval, date_str):
     return df, info
 
 try:
-    with st.spinner(f"Menarik data terbaru hingga {current_date_str} untuk {target_ticker}..."):
+    with st.spinner(f"Menarik data real-time hingga {current_date_str} untuk {target_ticker}..."):
         df, info = fetch_stock_data(target_ticker, period_val, interval_val, current_date_str)
         
     if not df.empty:
@@ -75,7 +75,7 @@ try:
         if df.index.tz is not None:
             df.index = df.index.tz_localize(None)
 
-        # Penyiapan Fitur Machine Learning untuk Proyeksi 3 Hari Kedepan (Shift 3 Periode)
+        # Penyiapan Fitur Machine Learning untuk Proyeksi 3 Hari Kedepan
         df['Prediction_Target'] = df['Close'].shift(-3)
         df['MA5'] = df['Close'].rolling(window=5).mean()
         df['MA20'] = df['Close'].rolling(window=20).mean()
@@ -95,7 +95,7 @@ try:
         change = current_price - prev_close
         pct_change = (change / prev_close) * 100 if prev_close else 0
 
-        # Prediksi 3 Hari Kedepan
+        # Prediksi 3 Hari Kedepan Berdasarkan Data Terakhir
         latest_features = pd.DataFrame({
             'MA5': [df['Close'].rolling(window=5).mean().iloc[-1]],
             'MA20': [df['Close'].rolling(window=20).mean().iloc[-1]],
@@ -123,10 +123,10 @@ try:
         comparison_chart = ml_df[['Close', 'Predicted_Price']]
         comparison_chart.columns = ['Harga Aktual (Real-Time)', 'Prediksi Model ML (3 Hari)']
         st.line_chart(comparison_chart, use_container_width=True)
-        st.caption(f"Data diperbarui otomatis hingga sesi perdagangan terakhir per {current_date_str}.")
+        st.caption(f"Data diperbarui secara real-time hingga tanggal {current_date_str}.")
 
     else:
-        st.warning("Data saham tidak ditemukan atau pasar sedang libur.")
+        st.warning("Data saham tidak ditemukan atau pasar sedang tutup.")
 
 except Exception as e:
     st.error(f"Terjadi kesalahan saat memproses model Machine Learning: {e}")
@@ -135,10 +135,6 @@ except Exception as e:
 # --- FITUR SCREENER SWING 1-3 HARI (NON-GORENGAN) ---
 st.markdown("---")
 st.subheader("🔍 Screener Otomatis: Potensi Swing Trading (1-3 Hari) - Non-Gorengan")
-st.markdown(
-    "Menyaring saham berkapitalisasi besar dan likuid (Blue Chip IDX) yang sedang mengalami "
-    "*pullback* sehat atau berada di area support untuk peluang pantulan (*rebound*) jangka pendek."
-)
 
 @st.cache_data(ttl=300)
 def run_swing_screener():
@@ -153,7 +149,7 @@ def run_swing_screener():
     for t in liquid_tickers:
         try:
             stock = yf.Ticker(t)
-            df_hist = stock.history(period="3mo", interval="1d", auto_adjust=True)
+            df_hist = stock.history(period="60d", interval="1d", auto_adjust=True)
             if len(df_hist) > 50:
                 close = df_hist['Close']
                 ma50 = close.rolling(50).mean().iloc[-1]
