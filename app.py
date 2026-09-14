@@ -14,7 +14,7 @@ st.markdown(
     "**Yahoo Finance**, **IDX**, **TradingView**, dan **Investing.com**."
 )
 
-# Daftar emiten utama IDX
+# Daftar emiten utama / Blue Chip IDX
 @st.cache_data(ttl=3600)
 def get_idx_universe():
     return [
@@ -103,16 +103,71 @@ try:
         chart_data = df[['Close', 'MA20', 'MA50']]
         st.line_chart(chart_data)
 
-        # Grafik RSI Terpisah untuk Cek Kejenuhan Pasar
+        # Grafik RSI Terpisah
         st.subheader("📉 Indikator RSI (Relative Strength Index)")
         st.line_chart(df[['RSI']])
-        st.caption("Catatan: RSI di atas 70 mengindikasikan jenuh beli (rawan turun), di bawah 30 mengindikasikan jenuh jual (potensi naik).")
+        st.caption("Catatan: RSI di atas 70 mengindikasikan jenuh beli, di bawah 30 mengindikasikan jenuh jual.")
 
     else:
         st.warning("Data saham tidak ditemukan.")
 
 except Exception as e:
-        st.error(f"Terjadi kesalahan saat memproses data teknikal: {e}")
+    st.error(f"Terjadi kesalahan saat memproses data teknikal: {e}")
+
+
+# --- FITUR SCREENER SWING 1-3 HARI (NON-GORENGAN) ---
+st.markdown("---")
+st.subheader("🔍 Screener Otomatis: Potensi Swing Trading (1-3 Hari) - Non-Gorengan")
+st.markdown(
+    "Menyaring saham berkapitalisasi besar dan likuid (Blue Chip IDX) yang sedang mengalami "
+    "*pullback* sehat atau berada di area support untuk peluang pantulan (*rebound*) jangka pendek."
+)
+
+@st.cache_data(ttl=300)
+def run_swing_screener():
+    liquid_tickers = [
+        "BBCA.JK", "BBRI.JK", "BMRI.JK", "BBNI.JK", "TLKM.JK", 
+        "ASII.JK", "ICBP.JK", "INDF.JK", "UNVR.JK", "KLBF.JK",
+        "ADRO.JK", "PTBA.JK", "ANTM.JK", "MDKA.JK", "UNTR.JK",
+        "SMGR.JK", "JSMR.JK", "INCO.JK", "PGAS.JK", "MEDC.JK"
+    ]
+    
+    results = []
+    for t in liquid_tickers:
+        try:
+            stock = yf.Ticker(t)
+            df = stock.history(period="3mo", interval="1d")
+            if len(df) > 50:
+                close = df['Close']
+                ma50 = close.rolling(50).mean().iloc[-1]
+                curr_price = close.iloc[-1]
+                
+                delta = close.diff()
+                gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+                rs = gain / loss
+                rsi = (100 - (100 / (1 + rs))).iloc[-1]
+                
+                if 30 <= rsi <= 50 and curr_price >= ma50:
+                    results.append({
+                        "Kode Saham": t,
+                        "Harga Terakhir (IDR)": round(curr_price, 2),
+                        "RSI (14)": round(rsi, 2),
+                        "Kondisi": "Pullback Sehat (Potensi Rebound 1-3 Hari)"
+                    })
+        except Exception:
+            continue
+    return pd.DataFrame(results)
+
+if st.button("🚀 Jalankan Screener Saham Potensial"):
+    with st.spinner("Menyaring emiten liquid non-gorengan berdasarkan indikator teknikal..."):
+        screener_df = run_swing_screener()
+        if not screener_df.empty:
+            st.success(f"Ditemukan {len(screener_df)} emiten yang memenuhi kriteria pantauan jangka pendek.")
+            st.dataframe(screener_df, use_container_width=True)
+        else:
+            st.info("Tidak ada emiten liquid yang masuk kriteria ketat saat ini. Pasar mungkin sedang dalam tren naik kuat atau konsolidasi.")
+
 
 # Tautan Cek Platform Eksternal
 st.markdown("---")
