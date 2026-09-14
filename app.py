@@ -11,9 +11,9 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🤖 AI & Machine Learning: Prediksi Harga Saham IDX Real-Time")
+st.title("🤖 AI & Machine Learning: Prediksi Harga Saham IDX 3 Hari Kedepan")
 st.markdown(
-    "Dashboard analisis prediktif berbasis *Machine Learning* untuk proyeksi kenaikan harga saham Indonesia, "
+    "Dashboard analisis prediktif berbasis *Machine Learning* untuk proyeksi kenaikan harga saham Indonesia 3 hari ke depan, "
     "terintegrasi dengan **Yahoo Finance**, **IDX**, **TradingView**, dan **Investing.com**."
 )
 
@@ -75,8 +75,8 @@ try:
         if df.index.tz is not None:
             df.index = df.index.tz_localize(None)
 
-        # Penyiapan Fitur Machine Learning (Regresi Linier)
-        df['Prediction_Target'] = df['Close'].shift(-1)
+        # Penyiapan Fitur Machine Learning untuk Proyeksi 3 Hari Kedepan (Shift 3 Periode)
+        df['Prediction_Target'] = df['Close'].shift(-3)
         df['MA5'] = df['Close'].rolling(window=5).mean()
         df['MA20'] = df['Close'].rolling(window=20).mean()
         
@@ -95,32 +95,33 @@ try:
         change = current_price - prev_close
         pct_change = (change / prev_close) * 100 if prev_close else 0
 
+        # Prediksi 3 Hari Kedepan
         latest_features = pd.DataFrame({
             'MA5': [df['Close'].rolling(window=5).mean().iloc[-1]],
             'MA20': [df['Close'].rolling(window=20).mean().iloc[-1]],
             'Volume': [df['Volume'].iloc[-1]]
         })
-        next_day_pred = model.predict(latest_features)[0]
-        pred_change = ((next_day_pred - current_price) / current_price) * 100
+        three_day_pred = model.predict(latest_features)[0]
+        pred_change = ((three_day_pred - current_price) / current_price) * 100
 
         # Metrik Atas
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Harga Real-Time", f"Rp {current_price:,.2f}", f"{pct_change:.2f}%")
-        col2.metric("Prediksi ML (Periode Berikutnya)", f"Rp {next_day_pred:,.2f}", f"{pred_change:.2f}%")
+        col2.metric("Prediksi ML (3 Hari Kedepan)", f"Rp {three_day_pred:,.2f}", f"{pred_change:.2f}%")
         col3.metric("MA 20", f"Rp {df['MA20'].iloc[-1]:,.2f}")
         col4.metric("Akurasi Model Regresi", "Valid / Optimal")
 
         # Kotak Analisis Sinyal Berbasis ML
-        st.subheader("💡 Sinyal Keputusan Swing Trading Berbasis AI")
-        if next_day_pred > current_price:
-            st.success(f"**Sinyal AI: BUY / BULLISH** - Model Machine Learning memproyeksikan kenaikan harga ke level Rp {next_day_pred:,.2f} pada sesi berikutnya.")
+        st.subheader("💡 Sinyal Keputusan Swing Trading Berbasis AI (Horizon 3 Hari)")
+        if three_day_pred > current_price:
+            st.success(f"**Sinyal AI: BUY / BULLISH** - Model Machine Learning memproyeksikan kenaikan harga ke level Rp {three_day_pred:,.2f} dalam 3 hari ke depan.")
         else:
-            st.warning(f"**Sinyal AI: CAUTION / BEARISH** - Model Machine Learning memproyeksikan potensi koreksi harga menuju level Rp {next_day_pred:,.2f}.")
+            st.warning(f"**Sinyal AI: CAUTION / BEARISH** - Model Machine Learning memproyeksikan potensi koreksi harga menuju level Rp {three_day_pred:,.2f} dalam 3 hari ke depan.")
 
         # Grafik Perbandingan
-        st.subheader(f"📊 Grafik Perbandingan: Harga Real-Time (Aktual) vs Prediksi AI ({target_ticker})")
+        st.subheader(f"📊 Grafik Perbandingan: Harga Real-Time (Aktual) vs Proyeksi AI 3 Hari ({target_ticker})")
         comparison_chart = ml_df[['Close', 'Predicted_Price']]
-        comparison_chart.columns = ['Harga Aktual (Real-Time)', 'Prediksi Model ML']
+        comparison_chart.columns = ['Harga Aktual (Real-Time)', 'Prediksi Model ML (3 Hari)']
         st.line_chart(comparison_chart, use_container_width=True)
         st.caption(f"Data diperbarui otomatis hingga sesi perdagangan terakhir per {current_date_str}.")
 
