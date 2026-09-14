@@ -34,7 +34,6 @@ components.html(
                 console.log("Audio context blocked by browser policy");
             }
         }
-        // Jalankan alarm ringan saat dashboard memuat data terbaru
         setTimeout(playAlertTone, 1000);
 
         setTimeout(function(){
@@ -110,155 +109,161 @@ try:
     with st.spinner(f"Menarik data real-time & kalkulasi presisi tinggi untuk {target_ticker}..."):
         df, info = fetch_stock_data(target_ticker, period_val, interval_val)
         
-    if not df.empty and len(df) > 30:
+    if not df.empty and len(df) > 35:
         if df.index.tz is not None:
             df.index = df.index.tz_localize(None)
 
-        # --- FEATURE ENGINEERING UNTUK AKURASI PRESISI TINGGI ---
-        df['Prediction_Target'] = df['Close'].shift(-3)
-        df['MA5'] = df['Close'].rolling(window=5).mean()
-        df['MA20'] = df['Close'].rolling(window=20).mean()
+        # --- FEATURE ENGINEERING YANG DISINKRONKAN AGAR TIDAK ERROR ---
+        df_ml = pd.DataFrame(index=df.index)
+        df_ml['Close'] = df['Close']
+        df_ml['Volume'] = df['Volume']
+        df_ml['MA5'] = df['Close'].rolling(window=5).mean()
+        df_ml['MA20'] = df['Close'].rolling(window=20).mean()
         
         # Indikator RSI (Relative Strength Index)
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
-        df['RSI'] = 100 - (100 / (1 + rs))
+        df_ml['RSI'] = 100 - (100 / (1 + rs))
         
         # Indikator MACD
         exp1 = df['Close'].ewm(span=12, adjust=False).mean()
         exp2 = df['Close'].ewm(span=26, adjust=False).mean()
-        df['MACD'] = exp1 - exp2
+        df_ml['MACD'] = exp1 - exp2
 
-        ml_df = df.dropna().copy()
-        
-        X = ml_df[['MA5', 'MA20', 'Volume', 'RSI', 'MACD']]
-        y = ml_df['Prediction_Target']
-        
-        train_size = int(len(X) * 0.85)
-        X_train, X_test = X.iloc[:train_size], X.iloc[train_size:]
-        y_train, y_test = y.iloc[:train_size], y.iloc[:train_size:]
-        
-        # Random Forest Regressor untuk presisi non-linear
-        model = RandomForestRegressor(n_estimators=150, random_state=42)
-        model.fit(X_train, y_train)
-        
-        y_pred_test = model.predict(X_test)
-        mape = mean_absolute_percentage_error(y_test, y_pred_test)
-        accuracy_percentage = max(0, 100 - (mape * 100))
+        # Target Prediksi 3 Hari ke Depan
+        df_ml['Prediction_Target'] = df['Close'].shift(-3)
 
-        current_price = df['Close'].iloc[-1]
-        prev_close = info.get('previousClose', df['Close'].iloc[-2] if len(df) > 1 else current_price)
-        change = current_price - prev_close
-        pct_change = (change / prev_close) * 100 if prev_close else 0
+        # Buang semua baris NaN secara serentak untuk memastikan ukuran X dan y persis sama
+        df_ml = df_ml.dropna()
 
-        latest_features = pd.DataFrame({
-            'MA5': [df['Close'].rolling(window=5).mean().iloc[-1]],
-            'MA20': [df['Close'].rolling(window=20).mean().iloc[-1]],
-            'Volume': [df['Volume'].iloc[-1]],
-            'RSI': [df['RSI'].iloc[-1]],
-            'MACD': [df['MACD'].iloc[-1]]
-        })
-        three_day_pred = model.predict(latest_features)[0]
-        pred_change = ((three_day_pred - current_price) / current_price) * 100
-        current_rsi = df['RSI'].iloc[-1]
-
-        # --- LOGIKA PENENTUAN WAKTU BELI & JUAL PRESISI ---
-        if three_day_pred > current_price and current_rsi < 60:
-            action_signal = "STRONG BUY (WAKTU BELI UTAMA)"
-            target_sell = three_day_pred * 1.025 # Take profit optimal +2.5%
-            stop_loss = current_price * 0.975   # Batas risiko -2.5%
-            signal_color = "success"
-        elif three_day_pred > current_price:
-            action_signal = "HOLD / CAUTION BUY (Momentum Jenuh Jual Terbatas)"
-            target_sell = three_day_pred
-            stop_loss = current_price * 0.97
-            signal_color = "info"
+        if len(df_ml) < 10:
+            st.warning("Data historis bersih setelah kalkulasi indikator terlalu sedikit untuk melatih model ML.")
         else:
-            action_signal = "SELL / TAKE PROFIT (WAKTU JUAL / KELUAR PASAR)"
-            target_sell = current_price
-            stop_loss = current_price * 0.97
-            signal_color = "warning"
+            X = df_ml[['MA5', 'MA20', 'Volume', 'RSI', 'MACD']]
+            y = df_ml['Prediction_Target']
+            
+            train_size = int(len(X) * 0.8)
+            X_train, X_test = X.iloc[:train_size], X.iloc[train_size:]
+            y_train, y_test = y.iloc[:train_size], y.iloc[train_size:]
+            
+            # Random Forest Regressor untuk presisi non-linear
+            model = RandomForestRegressor(n_estimators=100, random_state=42)
+            model.fit(X_train, y_train)
+            
+            y_pred_test = model.predict(X_test)
+            mape = mean_absolute_percentage_error(y_test, y_pred_test)
+            accuracy_percentage = max(0, 100 - (mape * 100))
 
-        # Metrik Atas
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Harga Real-Time", f"Rp {current_price:,.2f}", f"{pct_change:.2f}%")
-        col2.metric("Prediksi ML (3 Hari)", f"Rp {three_day_pred:,.2f}", f"{pred_change:.2f}%")
-        col3.metric("RSI (14) Indicator", f"{current_rsi:.2f}")
-        col4.metric("Akurasi Model", f"{accuracy_percentage:.2f}% (Valid)")
+            current_price = df['Close'].iloc[-1]
+            prev_close = info.get('previousClose', df['Close'].iloc[-2] if len(df) > 1 else current_price)
+            change = current_price - prev_close
+            pct_change = (change / prev_close) * 100 if prev_close else 0
 
-        # Kotak Peringatan Sinyal Beli & Jual Presisi
-        st.subheader("🚨 Alarm Sinyal Eksekusi Trading (Beli & Jual)")
-        if "STRONG BUY" in action_signal:
-            st.success(f"""
-            🔔 **ALARM NOTIFIKASI: SAATNYA BELI (BUY)**  
-            - **Rekomendasi Aksi:** Segera lakukan akumulasi pembelian untuk target swing 3 hari ke depan.  
-            - **Target Harga Jual (Take Profit):** Rp {target_sell:,.2f}  
-            - **Batas Risiko (Stop Loss):** Rp {stop_loss:,.2f}  
-            - **Proyeksi Keuntungan:** +{pred_change:.2f}% (Akurasi Model: {accuracy_percentage:.2f}%)
-            """)
-        elif "SELL" in action_signal:
-            st.warning(f"""
-            🔔 **ALARM NOTIFIKASI: SAATNYA JUAL / TAKE PROFIT (SELL)**  
-            - **Rekomendasi Aksi:** Amankan keuntungan atau keluar pasar untuk menghindari potensi koreksi.  
-            - **Target Koreksi ML:** Rp {three_day_pred:,.2f}  
-            - **Tingkat Keyakinan Model:** {accuracy_percentage:.2f}%
-            """)
-        else:
-            st.info(f"""
-            🔔 **ALARM NOTIFIKASI: WAIT & SEE (KONSOLIDASI)**  
-            - **Rekomendasi Aksi:** Tahan posisi atau tunggu konfirmasi volume lonjakan berikutnya.  
-            - **Proyeksi Harga 3 Hari:** Rp {three_day_pred:,.2f}
-            """)
+            latest_features = pd.DataFrame({
+                'MA5': [df_ml['MA5'].iloc[-1]],
+                'MA20': [df_ml['MA20'].iloc[-1]],
+                'Volume': [df_ml['Volume'].iloc[-1]],
+                'RSI': [df_ml['RSI'].iloc[-1]],
+                'MACD': [df_ml['MACD'].iloc[-1]]
+            })
+            three_day_pred = model.predict(latest_features)[0]
+            pred_change = ((three_day_pred - current_price) / current_price) * 100
+            current_rsi = df_ml['RSI'].iloc[-1]
 
-        # --- GRAFIK PLOTLY DENGAN GARIS PROYEKSI 3 HARI ---
-        st.subheader(f"📊 Grafik Perbandingan & Proyeksi Harga 3 Hari Kedepan ({target_ticker})")
-        
-        last_date = df.index[-1]
-        if interval_val == "1d":
-            future_dates = pd.bdate_range(start=last_date + pd.Timedelta(days=1), periods=3)
-        else:
-            future_dates = pd.date_range(start=last_date + pd.Timedelta(hours=1), periods=3, freq='h')
+            # --- LOGIKA PENENTUAN WAKTU BELI & JUAL PRESISI ---
+            if three_day_pred > current_price and current_rsi < 60:
+                action_signal = "STRONG BUY (WAKTU BELI UTAMA)"
+                target_sell = three_day_pred * 1.025 
+                stop_loss = current_price * 0.975   
+            elif three_day_pred > current_price:
+                action_signal = "HOLD / CAUTION BUY"
+                target_sell = three_day_pred
+                stop_loss = current_price * 0.97
+            else:
+                action_signal = "SELL / TAKE PROFIT (WAKTU JUAL)"
+                target_sell = current_price
+                stop_loss = current_price * 0.97
 
-        step_diff = (three_day_pred - current_price) / 3
-        future_prices = [current_price + step_diff * i for i in range(1, 4)]
-        
-        projection_x = [last_date] + list(future_dates)
-        projection_y = [current_price] + future_prices
+            # Metrik Atas
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Harga Real-Time", f"Rp {current_price:,.2f}", f"{pct_change:.2f}%")
+            col2.metric("Prediksi ML (3 Hari)", f"Rp {three_day_pred:,.2f}", f"{pred_change:.2f}%")
+            col3.metric("RSI (14) Indicator", f"{current_rsi:.2f}")
+            col4.metric("Akurasi Model", f"{accuracy_percentage:.2f}% (Valid)")
 
-        fig = go.Figure()
-        
-        fig.add_trace(go.Scatter(
-            x=df.index, 
-            y=df['Close'], 
-            mode='lines', 
-            name='Harga Aktual (Real-Time)',
-            line=dict(color='#1f77b4', width=2)
-        ))
-        
-        fig.add_trace(go.Scatter(
-            x=projection_x, 
-            y=projection_y, 
-            mode='lines+markers', 
-            name='Proyeksi AI Presisi (3 Hari Kedepan)',
-            line=dict(color='#2ca02c', width=3, dash='dash'),
-            marker=dict(size=9, color='#2ca02c')
-        ))
-        
-        fig.update_layout(
-            xaxis=dict(
-                title="Tanggal Perdagangan",
-                range=[df.index[0], future_dates[-1] + pd.Timedelta(days=1 if interval_val=="1d" else 2)]
-            ),
-            yaxis_title="Harga (IDR)",
-            hovermode="x unified",
-            margin=dict(l=20, r=20, t=20, b=20),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption(f"🔄 Data & Sinyal Alarm diperbarui secara real-time pada tanggal {current_date_str} pukul {current_time_str} WIB.")
+            # Kotak Peringatan Sinyal Beli & Jual Presisi
+            st.subheader("🚨 Alarm Sinyal Eksekusi Trading (Beli & Jual)")
+            if "STRONG BUY" in action_signal:
+                st.success(f"""
+                🔔 **ALARM NOTIFIKASI: SAATNYA BELI (BUY)**  
+                - **Rekomendasi Aksi:** Segera lakukan akumulasi pembelian untuk target swing 3 hari ke depan.  
+                - **Target Harga Jual (Take Profit):** Rp {target_sell:,.2f}  
+                - **Batas Risiko (Stop Loss):** Rp {stop_loss:,.2f}  
+                - **Proyeksi Keuntungan:** +{pred_change:.2f}% (Akurasi Model: {accuracy_percentage:.2f}%)
+                """)
+            elif "SELL" in action_signal:
+                st.warning(f"""
+                🔔 **ALARM NOTIFIKASI: SAATNYA JUAL / TAKE PROFIT (SELL)**  
+                - **Rekomendasi Aksi:** Amankan keuntungan atau keluar pasar untuk menghindari potensi koreksi.  
+                - **Target Koreksi ML:** Rp {three_day_pred:,.2f}  
+                - **Tingkat Keyakinan Model:** {accuracy_percentage:.2f}%
+                """)
+            else:
+                st.info(f"""
+                🔔 **ALARM NOTIFIKASI: WAIT & SEE (KONSOLIDASI)**  
+                - **Rekomendasi Aksi:** Tahan posisi atau tunggu konfirmasi volume lonjakan berikutnya.  
+                - **Proyeksi Harga 3 Hari:** Rp {three_day_pred:,.2f}
+                """)
+
+            # --- GRAFIK PLOTLY DENGAN GARIS PROYEKSI 3 HARI ---
+            st.subheader(f"📊 Grafik Perbandingan & Proyeksi Harga 3 Hari Kedepan ({target_ticker})")
+            
+            last_date = df.index[-1]
+            if interval_val == "1d":
+                future_dates = pd.bdate_range(start=last_date + pd.Timedelta(days=1), periods=3)
+            else:
+                future_dates = pd.date_range(start=last_date + pd.Timedelta(hours=1), periods=3, freq='h')
+
+            step_diff = (three_day_pred - current_price) / 3
+            future_prices = [current_price + step_diff * i for i in range(1, 4)]
+            
+            projection_x = [last_date] + list(future_dates)
+            projection_y = [current_price] + future_prices
+
+            fig = go.Figure()
+            
+            fig.add_trace(go.Scatter(
+                x=df.index, 
+                y=df['Close'], 
+                mode='lines', 
+                name='Harga Aktual (Real-Time)',
+                line=dict(color='#1f77b4', width=2)
+            ))
+            
+            fig.add_trace(go.Scatter(
+                x=projection_x, 
+                y=projection_y, 
+                mode='lines+markers', 
+                name='Proyeksi AI Presisi (3 Hari Kedepan)',
+                line=dict(color='#2ca02c', width=3, dash='dash'),
+                marker=dict(size=9, color='#2ca02c')
+            ))
+            
+            fig.update_layout(
+                xaxis=dict(
+                    title="Tanggal Perdagangan",
+                    range=[df.index[0], future_dates[-1] + pd.Timedelta(days=1 if interval_val=="1d" else 2)]
+                ),
+                yaxis_title="Harga (IDR)",
+                hovermode="x unified",
+                margin=dict(l=20, r=20, t=20, b=20),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(f"🔄 Data & Sinyal Alarm diperbarui secara real-time pada tanggal {current_date_str} pukul {current_time_str} WIB.")
 
     else:
         st.warning("Data historis tidak mencukupi atau emiten tidak aktif.")
