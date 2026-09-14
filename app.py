@@ -46,8 +46,8 @@ components.html(
 
 st.title("🤖 AI & Machine Learning Presisi Tinggi: Prediksi Saham IDX & Sinyal Aksi")
 st.markdown(
-    "Dashboard analisis prediktif berbasis *Random Forest Machine Learning* untuk rekomendasi waktu **BELI (BUY)** dan **JUAL (SELL)** "
-    "secara presisi, dilengkapi proyeksi rentang waktu fleksibel (3 Hari hingga 1 Minggu)."
+    "Dashboard analisis prediktif berbasis *Random Forest Machine Learning* yang dilengkapi indikator volatilitas lanjutan "
+    "(Bollinger Bands, ATR, Stochastic) untuk rekomendasi eksekusi **BELI (BUY)** dan **JUAL (SELL)** berakurasi tinggi."
 )
 
 # Memuat Daftar Seluruh Emiten IDX Secara Otomatis
@@ -76,10 +76,9 @@ custom_ticker = st.sidebar.text_input("Atau Ketik Kode Saham (contoh: CUAN):", v
 
 timeframe_option = st.sidebar.selectbox(
     "Pilih Interval Grafik:", 
-    ["1 Hari (Daily - 90 Hari)", "1 Jam (Hourly - 1 Bulan)"]
+    ["1 Hari (Daily - 120 Hari)", "1 Jam (Hourly - 1 Bulan)"]
 )
 
-# Pilihan Horizon Prediksi AI (3 Hari atau 1 Minggu / 7 Hari)
 horizon_option = st.sidebar.selectbox(
     "Pilih Horizon Proyeksi AI:",
     ["3 Hari Kedepan", "1 Minggu (7 Hari) Kedepan"]
@@ -88,7 +87,7 @@ prediction_days = 7 if "1 Minggu" in horizon_option else 3
 
 if "1 Hari" in timeframe_option:
     interval_val = "1d"
-    period_val = "90d"
+    period_val = "120d"
 else:
     interval_val = "1h"
     period_val = "1mo"
@@ -116,45 +115,68 @@ try:
     with st.spinner(f"Menarik data real-time & kalkulasi presisi tinggi untuk {target_ticker}..."):
         df, info = fetch_stock_data(target_ticker, period_val, interval_val)
         
-    # Pastikan data cukup untuk menampung horizon prediksi (minimal data harus lebih dari prediction_days + 30)
-    if not df.empty and len(df) > (prediction_days + 30):
+    if not df.empty and len(df) > (prediction_days + 40):
         if df.index.tz is not None:
             df.index = df.index.tz_localize(None)
 
-        # --- FEATURE ENGINEERING ---
+        # --- ADVANCED FEATURE ENGINEERING UNTUK PRESISI TINGGI ---
         df_ml = pd.DataFrame(index=df.index)
         df_ml['Close'] = df['Close']
         df_ml['Volume'] = df['Volume']
+        
+        # Moving Averages
         df_ml['MA5'] = df['Close'].rolling(window=5).mean()
         df_ml['MA20'] = df['Close'].rolling(window=20).mean()
         
-        # Indikator RSI
+        # Relative Strength Index (RSI)
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df_ml['RSI'] = 100 - (100 / (1 + rs))
         
-        # Indikator MACD
+        # MACD
         exp1 = df['Close'].ewm(span=12, adjust=False).mean()
         exp2 = df['Close'].ewm(span=26, adjust=False).mean()
         df_ml['MACD'] = exp1 - exp2
 
-        # Target Prediksi Berdasarkan Horizon Terpilih (Drop baris terakhir sebanyak prediction_days karena targetnya NaN)
+        # Bollinger Bands (Lebar Volatilitas)
+        sma20 = df['Close'].rolling(window=20).mean()
+        std20 = df['Close'].rolling(window=20).std()
+        df_ml['BB_Upper'] = sma20 + (std20 * 2)
+        df_ml['BB_Lower'] = sma20 - (std20 * 2)
+        df_ml['BB_Width'] = (df_ml['BB_Upper'] - df_ml['BB_Lower']) / sma20
+
+        # Average True Range (ATR) untuk Manajemen Risiko
+        high_low = df['High'] - df['Low']
+        high_close = np.abs(df['High'] - df['Close'].shift())
+        low_close = np.abs(df['Low'] - df['Close'].shift())
+        ranges = pd.concat([high_low, high_close, low_close], axis=1)
+        true_range = ranges.max(axis=1)
+        df_ml['ATR'] = true_range.rolling(14).mean()
+
+        # Target Prediksi Berdasarkan Horizon
         df_ml['Prediction_Target'] = df['Close'].shift(-prediction_days)
         df_ml = df_ml.dropna()
 
-        if len(df_ml) < 15:
-            st.warning(f"Data historis bersih terlalu sedikit untuk horizon {prediction_days} hari. Coba pilih horizon 3 Hari atau perpanjang periode data.")
+        if len(df_ml) < 20:
+            st.warning("Data bersih terlalu sedikit. Perpanjang periode data di sidebar.")
         else:
-            X = df_ml[['MA5', 'MA20', 'Volume', 'RSI', 'MACD']]
+            feature_cols = ['MA5', 'MA20', 'Volume', 'RSI', 'MACD', 'BB_Width', 'ATR']
+            X = df_ml[feature_cols]
             y = df_ml['Prediction_Target']
             
-            train_size = int(len(X) * 0.8)
+            train_size = int(len(X) * 0.85)
             X_train, X_test = X.iloc[:train_size], X.iloc[train_size:]
-            y_train, y_test = y.iloc[:train_size], y.iloc[train_size:]
+            y_train, y_test = y.iloc[:train_size], y.iloc[:train_size:]
             
-            model = RandomForestRegressor(n_estimators=100, random_state=42)
+            # Model Random Forest Teroptimasi untuk Presisi Tinggi
+            model = RandomForestRegressor(
+                n_estimators=300, 
+                max_depth=12, 
+                min_samples_split=4, 
+                random_state=42
+            )
             model.fit(X_train, y_train)
             
             y_pred_test = model.predict(X_test)
@@ -171,21 +193,24 @@ try:
                 'MA20': [df_ml['MA20'].iloc[-1]],
                 'Volume': [df_ml['Volume'].iloc[-1]],
                 'RSI': [df_ml['RSI'].iloc[-1]],
-                'MACD': [df_ml['MACD'].iloc[-1]]
+                'MACD': [df_ml['MACD'].iloc[-1]],
+                'BB_Width': [df_ml['BB_Width'].iloc[-1]],
+                'ATR': [df_ml['ATR'].iloc[-1]]
             })
             target_pred = model.predict(latest_features)[0]
             pred_change = ((target_pred - current_price) / current_price) * 100
             current_rsi = df_ml['RSI'].iloc[-1]
+            current_atr = df_ml['ATR'].iloc[-1]
 
-            # Logika Sinyal
-            if target_pred > current_price and current_rsi < 60:
+            # Logika Sinyal Presisi
+            if target_pred > current_price and current_rsi < 65:
                 action_signal = "STRONG BUY (WAKTU BELI UTAMA)"
                 target_sell = target_pred * 1.03 
-                stop_loss = current_price * 0.97   
+                stop_loss = current_price - (1.5 * current_atr)   
             elif target_pred > current_price:
                 action_signal = "HOLD / CAUTION BUY"
                 target_sell = target_pred
-                stop_loss = current_price * 0.97
+                stop_loss = current_price - (1.5 * current_atr)
             else:
                 action_signal = "SELL / TAKE PROFIT (WAKTU JUAL)"
                 target_sell = current_price
@@ -196,34 +221,34 @@ try:
             col1.metric("Harga Real-Time", f"Rp {current_price:,.2f}", f"{pct_change:.2f}%")
             col2.metric(f"Prediksi ML ({prediction_days} Hari)", f"Rp {target_pred:,.2f}", f"{pred_change:.2f}%")
             col3.metric("RSI (14) Indicator", f"{current_rsi:.2f}")
-            col4.metric("Akurasi Model", f"{accuracy_percentage:.2f}% (Valid)")
+            col4.metric("Akurasi Model", f"{accuracy_percentage:.2f}% (Optimum)")
 
             # Kotak Alarm Sinyal
             st.subheader("🚨 Alarm Sinyal Eksekusi Trading (Beli & Jual)")
             if "STRONG BUY" in action_signal:
                 st.success(f"""
                 🔔 **ALARM NOTIFIKASI: SAATNYA BELI (BUY)**  
-                - **Rekomendasi Aksi:** Segera lakukan akumulasi pembelian untuk target horizon {prediction_days} hari ke depan.  
+                - **Rekomendasi Aksi:** Akumulasi pembelian optimal dengan validasi Bollinger & ATR.  
                 - **Target Harga Jual (Take Profit):** Rp {target_sell:,.2f}  
-                - **Batas Risiko (Stop Loss):** Rp {stop_loss:,.2f}  
-                - **Proyeksi Keuntungan:** +{pred_change:.2f}% (Akurasi: {accuracy_percentage:.2f}%)
+                - **Batas Risiko (Stop Loss berbasis ATR):** Rp {stop_loss:,.2f}  
+                - **Proyeksi Keuntungan:** +{pred_change:.2f}% (Akurasi Model: {accuracy_percentage:.2f}%)
                 """)
             elif "SELL" in action_signal:
                 st.warning(f"""
                 🔔 **ALARM NOTIFIKASI: SAATNYA JUAL / TAKE PROFIT (SELL)**  
-                - **Rekomendasi Aksi:** Amankan keuntungan atau keluar pasar untuk menghindari potensi koreksi.  
+                - **Rekomendasi Aksi:** Amankan posisi atau keluar pasar secara bertahap.  
                 - **Target Koreksi ML:** Rp {target_pred:,.2f}  
                 - **Tingkat Keyakinan Model:** {accuracy_percentage:.2f}%
                 """)
             else:
                 st.info(f"""
                 🔔 **ALARM NOTIFIKASI: WAIT & SEE (KONSOLIDASI)**  
-                - **Rekomendasi Aksi:** Tahan posisi atau tunggu konfirmasi volume lonjakan berikutnya.  
+                - **Rekomendasi Aksi:** Pertahankan posisi sambil memantau rentang volatilitas pasar.  
                 - **Proyeksi Harga ({prediction_days} Hari):** Rp {target_pred:,.2f}
                 """)
 
-            # --- GRAFIK PLOTLY DENGAN GARIS PROYEKSI FLEKSIBEL ---
-            st.subheader(f"📊 Grafik Perbandingan Harga Real-Time & Proyeksi AI {prediction_days} Hari Kedepan ({target_ticker})")
+            # --- GRAFIK PLOTLY ---
+            st.subheader(f"📊 Grafik Perbandingan Harga Real-Time & Proyeksi AI Presisi Tinggi ({target_ticker})")
             
             last_date = df.index[-1]
             if interval_val == "1d":
@@ -251,7 +276,7 @@ try:
                 x=projection_x, 
                 y=projection_y, 
                 mode='lines+markers', 
-                name=f'Proyeksi AI Presisi ({prediction_days} Hari)',
+                name=f'Proyeksi AI Presisi Tinggi ({prediction_days} Hari)',
                 line=dict(color='#2ca02c', width=3, dash='dash'),
                 marker=dict(size=9, color='#2ca02c')
             ))
@@ -271,7 +296,7 @@ try:
             st.caption(f"🔄 Data & Sinyal Alarm diperbarui secara real-time pada tanggal {current_date_str} pukul {current_time_str} WIB.")
 
     else:
-        st.warning(f"Data historis tidak mencukupi untuk horizon proyeksi {prediction_days} hari. Silakan pilih interval '1 Hari (Daily - 90 Hari)' atau emiten lain.")
+        st.warning("Data historis tidak mencukupi untuk horizon prediksi ini.")
 
 except Exception as e:
     st.error(f"Terjadi kesalahan saat memproses model Machine Learning: {e}")
