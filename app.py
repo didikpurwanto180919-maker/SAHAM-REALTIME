@@ -116,7 +116,8 @@ try:
     with st.spinner(f"Menarik data real-time & kalkulasi presisi tinggi untuk {target_ticker}..."):
         df, info = fetch_stock_data(target_ticker, period_val, interval_val)
         
-    if not df.empty and len(df) > 40:
+    # Pastikan data cukup untuk menampung horizon prediksi (minimal data harus lebih dari prediction_days + 30)
+    if not df.empty and len(df) > (prediction_days + 30):
         if df.index.tz is not None:
             df.index = df.index.tz_localize(None)
 
@@ -139,19 +140,19 @@ try:
         exp2 = df['Close'].ewm(span=26, adjust=False).mean()
         df_ml['MACD'] = exp1 - exp2
 
-        # Target Prediksi Berdasarkan Horizon Terpilih
+        # Target Prediksi Berdasarkan Horizon Terpilih (Drop baris terakhir sebanyak prediction_days karena targetnya NaN)
         df_ml['Prediction_Target'] = df['Close'].shift(-prediction_days)
         df_ml = df_ml.dropna()
 
-        if len(df_ml) < 10:
-            st.warning("Data historis bersih setelah kalkulasi indikator terlalu sedikit.")
+        if len(df_ml) < 15:
+            st.warning(f"Data historis bersih terlalu sedikit untuk horizon {prediction_days} hari. Coba pilih horizon 3 Hari atau perpanjang periode data.")
         else:
             X = df_ml[['MA5', 'MA20', 'Volume', 'RSI', 'MACD']]
             y = df_ml['Prediction_Target']
             
             train_size = int(len(X) * 0.8)
             X_train, X_test = X.iloc[:train_size], X.iloc[train_size:]
-            y_train, y_test = y.iloc[:train_size], y.iloc[:train_size:]
+            y_train, y_test = y.iloc[:train_size], y.iloc[train_size:]
             
             model = RandomForestRegressor(n_estimators=100, random_state=42)
             model.fit(X_train, y_train)
@@ -270,7 +271,7 @@ try:
             st.caption(f"🔄 Data & Sinyal Alarm diperbarui secara real-time pada tanggal {current_date_str} pukul {current_time_str} WIB.")
 
     else:
-        st.warning("Data historis tidak mencukupi atau emiten tidak aktif.")
+        st.warning(f"Data historis tidak mencukupi untuk horizon proyeksi {prediction_days} hari. Silakan pilih interval '1 Hari (Daily - 90 Hari)' atau emiten lain.")
 
 except Exception as e:
     st.error(f"Terjadi kesalahan saat memproses model Machine Learning: {e}")
