@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import datetime
 from sklearn.linear_model import LinearRegression
 
 # Konfigurasi Halaman Streamlit
@@ -52,19 +53,22 @@ if not target_ticker.endswith(".JK") and target_ticker:
     target_ticker += ".JK"
 
 if st.sidebar.button("🔄 Perbarui & Prediksi Ulang"):
+    st.cache_data.clear()
     st.rerun()
 
-# Fungsi Mengambil Data Historis / Real-Time
+# Fungsi Mengambil Data Historis / Real-Time dengan Cache Berbasis Tanggal Hari Ini
+current_date_str = str(datetime.date.today())
+
 @st.cache_data(ttl=60)
-def fetch_stock_data(ticker, period, interval):
+def fetch_stock_data(ticker, period, interval, date_str):
     stock = yf.Ticker(ticker)
-    df = stock.history(period=period, interval=interval)
+    df = stock.history(period=period, interval=interval, auto_adjust=True)
     info = stock.info
     return df, info
 
 try:
-    with st.spinner(f"Menarik data dan menjalankan Machine Learning untuk {target_ticker}..."):
-        df, info = fetch_stock_data(target_ticker, period_val, interval_val)
+    with st.spinner(f"Menarik data terbaru hingga {current_date_str} untuk {target_ticker}..."):
+        df, info = fetch_stock_data(target_ticker, period_val, interval_val, current_date_str)
         
     if not df.empty:
         # Menghapus zona waktu pada index agar grafik Streamlit merender tanggal dengan bersih
@@ -118,10 +122,10 @@ try:
         comparison_chart = ml_df[['Close', 'Predicted_Price']]
         comparison_chart.columns = ['Harga Aktual (Real-Time)', 'Prediksi Model ML']
         st.line_chart(comparison_chart, use_container_width=True)
-        st.caption("Garis biru menunjukkan pergerakan harga riwayat asli di pasar, sedangkan garis oranye menunjukkan garis prediksi dari algoritma Machine Learning.")
+        st.caption(f"Data diperbarui otomatis hingga sesi perdagangan terakhir per {current_date_str}.")
 
     else:
-        st.warning("Data saham tidak ditemukan atau pasar sedang libur total.")
+        st.warning("Data saham tidak ditemukan atau pasar sedang libur.")
 
 except Exception as e:
     st.error(f"Terjadi kesalahan saat memproses model Machine Learning: {e}")
@@ -148,7 +152,7 @@ def run_swing_screener():
     for t in liquid_tickers:
         try:
             stock = yf.Ticker(t)
-            df_hist = stock.history(period="3mo", interval="1d")
+            df_hist = stock.history(period="3mo", interval="1d", auto_adjust=True)
             if len(df_hist) > 50:
                 close = df_hist['Close']
                 ma50 = close.rolling(50).mean().iloc[-1]
