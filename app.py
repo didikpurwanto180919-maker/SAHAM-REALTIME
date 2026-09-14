@@ -2,27 +2,35 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 
-# Konfigurasi Halaman
-st.set_page_config(page_title="Scalping Dashboard IDX Real-Time", layout="wide")
+# Konfigurasi Halaman Streamlit
+st.set_page_config(
+    page_title="Dashboard Swing Trading IDX", 
+    layout="wide"
+)
 
-st.title("⚡ Dashboard Scalping Saham Indonesia (IDX)")
-st.markdown("Analisis teknikal cepat (*MACD, RSI, Bollinger Bands*) untuk strategi *scalping* saham harian.")
+st.title("📈 Dashboard Swing Trading & Indikator Teknikal Saham IDX")
+st.markdown(
+    "Analisis teknikal *real-time* khusus strategi *swing trading* saham Indonesia terintegrasi dengan "
+    "**Yahoo Finance**, **IDX**, **TradingView**, dan **Investing.com**."
+)
 
-# Daftar Emiten Utama IDX
+# Daftar emiten utama IDX
 @st.cache_data(ttl=3600)
 def get_idx_universe():
     return [
         "BBCA.JK", "BBRI.JK", "BMRI.JK", "BBNI.JK", "TLKM.JK", 
-        "ASII.JK", "GOTO.JK", "ADRO.JK", "PTBA.JK", "ANTM.JK", 
-        "MDKA.JK", "UNTR.JK", "ARTO.JK", "BRIS.JK", "PGAS.JK"
+        "ASII.JK", "UNVR.JK", "ICBP.JK", "INDF.JK", "GOTO.JK", 
+        "ADRO.JK", "PTBA.JK", "ANTM.JK", "MDKA.JK", "UNTR.JK", 
+        "KLBF.JK", "SMGR.JK", "CPIN.JK", "INKP.JK", "MEDC.JK",
+        "ARTO.JK", "BRIS.JK", "PGAS.JK", "BUKA.JK", "JSMR.JK"
     ]
 
 all_tickers = get_idx_universe()
 
-# Sidebar Input
-st.sidebar.header("Pengaturan Scalping")
-selected_ticker = st.sidebar.selectbox("Pilih Emiten:", all_tickers)
-custom_ticker = st.sidebar.text_input("Atau Ketik Kode Saham:", value="")
+# Sidebar Navigasi dan Pencarian
+st.sidebar.header("🔍 Pengaturan Analisis")
+selected_ticker = st.sidebar.selectbox("Pilih Emiten Populer:", all_tickers)
+custom_ticker = st.sidebar.text_input("Atau Ketik Kode Saham (contoh: BBCA):", value="")
 
 target_ticker = custom_ticker.strip().upper() if custom_ticker.strip() else selected_ticker
 if not target_ticker.endswith(".JK") and target_ticker:
@@ -31,91 +39,96 @@ if not target_ticker.endswith(".JK") and target_ticker:
 if st.sidebar.button("🔄 Perbarui Data"):
     st.rerun()
 
-# Fungsi Ambil Data Intraday (Interval 5 Menit untuk Scalping)
-@st.cache_data(ttl=30)
-def fetch_scalping_data(ticker):
+# Fungsi Mengambil Data Historis (Periode 6 Bulan untuk Analisis Swing)
+@st.cache_data(ttl=60)
+def fetch_stock_data(ticker):
     stock = yf.Ticker(ticker)
-    # Mengambil data interval 5 menit untuk rentang waktu 5 hari terakhir
-    df = stock.history(period="5d", interval="5m")
+    df = stock.history(period="6mo", interval="1d")
     info = stock.info
     return df, info
 
 try:
-    with st.spinner(f"Memproses indikator teknikal untuk {target_ticker}..."):
-        df, info = fetch_scalping_data(target_ticker)
+    with st.spinner(f"Menghitung indikator teknikal untuk {target_ticker}..."):
+        df, info = fetch_stock_data(target_ticker)
         
-    if not df.empty and len(df) > 26:
-        # Kalkulasi Indikator Teknikal
-        # 1. RSI 14
+    if not df.empty:
+        # Perhitungan Indikator Teknikal (MA, RSI, MACD)
+        df['MA20'] = df['Close'].rolling(window=20).mean()
+        df['MA50'] = df['Close'].rolling(window=50).mean()
+        
+        # RSI 14 Periode
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df['RSI'] = 100 - (100 / (1 + rs))
-
-        # 2. MACD (12, 26, 9)
+        
+        # MACD
         exp1 = df['Close'].ewm(span=12, adjust=False).mean()
         exp2 = df['Close'].ewm(span=26, adjust=False).mean()
         df['MACD'] = exp1 - exp2
         df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
-        # 3. Bollinger Bands (20, 2)
-        df['BB_Middle'] = df['Close'].rolling(window=20).mean()
-        std = df['Close'].rolling(window=20).std()
-        df['BB_Upper'] = df['BB_Middle'] + (std * 2)
-        df['BB_Lower'] = df['BB_Middle'] - (std * 2)
-
         current_price = df['Close'].iloc[-1]
-        prev_close = info.get('previousClose', df['Close'].iloc[-2])
+        prev_close = info.get('previousClose', df['Close'].iloc[-2] if len(df) > 1 else current_price)
         change = current_price - prev_close
         pct_change = (change / prev_close) * 100 if prev_close else 0
-        current_rsi = df['RSI'].iloc[-1]
-        current_macd = df['MACD'].iloc[-1]
-        current_signal = df['Signal_Line'].iloc[-1]
 
         # Metrik Atas
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Harga Real-Time", f"Rp {current_price:,.2f}", f"{pct_change:.2f}%")
-        c2.metric("RSI (14)", f"{current_rsi:.2f}", "Overbought >70 | Oversold <30" if current_rsi > 70 or current_rsi < 30 else "Normal")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Harga Terakhir", f"Rp {current_price:,.2f}", f"{pct_change:.2f}%")
+        col2.metric("RSI (14)", f"{df['RSI'].iloc[-1]:.2f}")
+        col3.metric("MA 20", f"Rp {df['MA20'].iloc[-1]:,.2f}")
+        col4.metric("MA 50", f"Rp {df['MA50'].iloc[-1]:,.2f}")
+
+        # Kotak Analisis Sinyal Swing Trading Otomatis
+        st.subheader("💡 Sinyal & Analisis Swing Trading")
+        rsi_val = df['RSI'].iloc[-1]
+        ma20_val = df['MA20'].iloc[-1]
+        ma50_val = df['MA50'].iloc[-1]
         
-        signal_status = "BULLISH 🟢" if current_macd > current_signal else "BEARISH 🔴"
-        c3.metric("Sinyal MACD", signal_status)
-        c4.metric("Volume Terakhir", f"{int(df['Volume'].iloc[-1]):,}")
+        signal_box = st.container()
+        with signal_box:
+            if current_price > ma20_val and ma20_val > ma50_val and rsi_val < 70:
+                st.success("**Sinyal: POTENSI BUY (Uptrend / Golden Cross Trend)** - Harga berada di atas MA20 & MA50 dengan RSI belum jenuh beli (Overbought).")
+            elif rsi_val > 70:
+                st.warning("**Sinyal: OVERBOUGHT (Waspada Koreksi)** - RSI di atas 70, indikasi harga sudah naik terlalu tinggi dalam jangka pendek.")
+            elif rsi_val < 30:
+                st.info("**Sinyal: OVERSOLD (Potensi Rebound)** - RSI di bawah 30, perhatikan peluang pantulan harga (*rebound*).")
+            else:
+                st.info("**Sinyal: NEUTRAL / WAIT & SEE** - Tren harga berkonsolidasi, tunggu konfirmasi volume atau perlintasan indikator.")
 
-        # Rekomendasi Aksi Scalping Cepat
-        st.subheader("💡 Indikasi Sinyal Scalper Cepat")
-        if current_rsi < 35 and current_macd > current_signal:
-            st.success("🟢 **Peluang BUY (Scalping):** RSI berada di area *oversold* dan momentum MACD mulai berbalik naik.")
-        elif current_rsi > 68:
-            st.warning("⚠️ **Peluang SELL / Take Profit:** RSI mendekati area *overbought*, waspadai potensi koreksi cepat.")
-        else:
-            st.info("ℹ️ **Konsolidasi / Wait and See:** Belum ada sinyal ekstrem yang valid untuk eksekusi kilat.")
+        # Grafik Harga dan Moving Average
+        st.subheader(f"📊 Grafik Harga & Tren MA (Moving Average): {target_ticker}")
+        chart_data = df[['Close', 'MA20', 'MA50']]
+        st.line_chart(chart_data)
 
-        # Grafik Harga & Bollinger Bands
-        st.subheader("📈 Grafik Harga & Bollinger Bands (Interval 5 Menit)")
-        st.line_chart(df[['Close', 'BB_Upper', 'BB_Middle', 'BB_Lower']])
-
-        # Grafik RSI
-        st.subheader("📉 Indikator RSI (14)")
+        # Grafik RSI Terpisah untuk Cek Kejenuhan Pasar
+        st.subheader("📉 Indikator RSI (Relative Strength Index)")
         st.line_chart(df[['RSI']])
+        st.caption("Catatan: RSI di atas 70 mengindikasikan jenuh beli (rawan turun), di bawah 30 mengindikasikan jenuh jual (potensi naik).")
 
     else:
-        st.warning("Data intraday tidak mencukupi untuk menghitung indikator teknikal.")
+        st.warning("Data saham tidak ditemukan.")
 
 except Exception as e:
-    st.error(f"Terjadi kesalahan teknis: {e}")
+        st.error(f"Terjadi kesalahan saat memproses data teknikal: {e}")
 
-# Tautan Platform Eksternal
+# Tautan Cek Platform Eksternal
 st.markdown("---")
-st.subheader("🔗 Cek Grafik Lanjutan di Platform Utama")
+st.subheader("🔗 Akses Cepat Grafik Lanjutan")
 clean_sym = target_ticker.replace(".JK", "")
 
-col_a, col_b, col_c, col_d = st.columns(4)
-with col_a:
-    st.markdown(f"[TradingView](https://www.tradingview.com/chart/?symbol=IDX:{clean_sym})")
-with col_b:
-    st.markdown(f"[Yahoo Finance](https://finance.yahoo.com/quote/{target_ticker})")
-with col_c:
-    st.markdown(f"[Investing.com](https://www.investing.com/equities/{clean_sym.lower()}-indonesia)")
-with col_d:
-    st.markdown(f"[IDX Resmi](https://www.idx.co.id/)")
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    st.markdown("**TradingView**")
+    st.markdown(f"[Buka Chart TA](https://www.tradingview.com/chart/?symbol=IDX:{clean_sym})")
+with c2:
+    st.markdown("**Yahoo Finance**")
+    st.markdown(f"[Cek Market Info](https://finance.yahoo.com/quote/{target_ticker})")
+with c3:
+    st.markdown("**Investing.com**")
+    st.markdown(f"[Analisis & Berita](https://www.investing.com/equities/{clean_sym.lower()}-indonesia)")
+with c4:
+    st.markdown("**IDX (Bursa Efek)**")
+    st.markdown("[Situs Resmi BEI](https://www.idx.co.id/)")
