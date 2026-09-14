@@ -98,14 +98,13 @@ try:
             else:
                 st.info("**Sinyal: NEUTRAL / WAIT & SEE** - Tren harga berkonsolidasi, tunggu konfirmasi volume atau perlintasan indikator.")
 
-        # Grafik Harga dan Moving Average
+        # Perbaikan Tampilan Grafik Harga dan Moving Average secara Terpisah/Bersih
         st.subheader(f"📊 Grafik Harga & Tren MA (Moving Average): {target_ticker}")
-        chart_data = df[['Close', 'MA20', 'MA50']]
-        st.line_chart(chart_data)
+        st.line_chart(df[['Close', 'MA20', 'MA50']], use_container_width=True)
 
-        # Grafik RSI Terpisah
+        # Grafik RSI Terpisah dengan Rentang Jelas
         st.subheader("📉 Indikator RSI (Relative Strength Index)")
-        st.line_chart(df[['RSI']])
+        st.line_chart(df[['RSI']], use_container_width=True)
         st.caption("Catatan: RSI di atas 70 mengindikasikan jenuh beli, di bawah 30 mengindikasikan jenuh jual.")
 
     else:
@@ -136,9 +135,9 @@ def run_swing_screener():
     for t in liquid_tickers:
         try:
             stock = yf.Ticker(t)
-            df = stock.history(period="3mo", interval="1d")
-            if len(df) > 50:
-                close = df['Close']
+            df_hist = stock.history(period="3mo", interval="1d")
+            if len(df_hist) > 50:
+                close = df_hist['Close']
                 ma50 = close.rolling(50).mean().iloc[-1]
                 curr_price = close.iloc[-1]
                 
