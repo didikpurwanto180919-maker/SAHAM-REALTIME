@@ -31,22 +31,29 @@ st.markdown(
     "terintegrasi dengan **Yahoo Finance**, **IDX**, **TradingView**, dan **Investing.com**. *(Auto-refresh aktif)*"
 )
 
-# Daftar emiten utama / Blue Chip IDX
-@st.cache_data(ttl=30)
+# Memuat Daftar Seluruh Emiten IDX Secara Otomatis
+@st.cache_data(ttl=86400)
 def get_idx_universe():
-    return [
-        "BBCA.JK", "BBRI.JK", "BMRI.JK", "BBNI.JK", "TLKM.JK", 
-        "ASII.JK", "UNVR.JK", "ICBP.JK", "INDF.JK", "GOTO.JK", 
-        "ADRO.JK", "PTBA.JK", "ANTM.JK", "MDKA.JK", "UNTR.JK", 
-        "KLBF.JK", "SMGR.JK", "CPIN.JK", "INKP.JK", "MEDC.JK",
-        "ARTO.JK", "BRIS.JK", "PGAS.JK", "BUKA.JK", "JSMR.JK"
-    ]
+    try:
+        url = "https://raw.githubusercontent.com/wildangunawan/Dataset-Saham-IDX/master/List%20Emiten/all_emiten.csv"
+        df_emiten = pd.read_csv(url)
+        tickers = [str(code).strip().upper() + ".JK" for code in df_emiten['Code'].dropna().unique()]
+        return sorted(tickers)
+    except Exception:
+        # Fallback cadangan jika koneksi gagal
+        return [
+            "BBCA.JK", "BBRI.JK", "BMRI.JK", "BBNI.JK", "TLKM.JK", 
+            "ASII.JK", "UNVR.JK", "ICBP.JK", "INDF.JK", "GOTO.JK", 
+            "ADRO.JK", "PTBA.JK", "ANTM.JK", "MDKA.JK", "UNTR.JK", 
+            "KLBF.JK", "SMGR.JK", "CPIN.JK", "INKP.JK", "MEDC.JK",
+            "ARTO.JK", "BRIS.JK", "PGAS.JK", "BUKA.JK", "JSMR.JK"
+        ]
 
 all_tickers = get_idx_universe()
 
 # Sidebar Navigasi dan Pengaturan Model ML
 st.sidebar.header("🔍 Pengaturan Model ML & Data")
-selected_target = st.sidebar.selectbox("Pilih Emiten Populer:", all_tickers)
+selected_target = st.sidebar.selectbox("Pilih Emiten:", all_tickers)
 custom_ticker = st.sidebar.text_input("Atau Ketik Kode Saham (contoh: BBCA):", value="")
 
 # Pilihan Interval Waktu
@@ -137,12 +144,10 @@ try:
         # --- GRAFIK PLOTLY DENGAN PROYEKSI MASA DEPAN 3 HARI ---
         st.subheader(f"📊 Grafik Perbandingan & Proyeksi Harga 3 Hari Kedepan ({target_ticker})")
         
-        # Membuat tanggal masa depan (3 hari kerja berikutnya dari data terakhir)
         last_date = df.index[-1]
         if interval_val == "1d":
             future_dates = pd.bdate_range(start=last_date + pd.Timedelta(days=1), periods=3)
         else:
-            # Jika interval jam (1h), buat interval per jam ke depan
             future_dates = pd.date_range(start=last_date + pd.Timedelta(hours=1), periods=3, freq='h')
 
         fig = go.Figure()
