@@ -76,7 +76,7 @@ if st.sidebar.button("🔄 Perbarui & Prediksi Ulang Sekarang"):
     st.cache_data.clear()
     st.rerun()
 
-# Fungsi Mengambil Data Historis dengan Cache Waktu Singkat
+# Mengambil Waktu Real-Time Server/WIB secara akurat
 current_date_str = str(datetime.date.today())
 current_time_str = datetime.datetime.now().strftime("%H:%M:%S")
 
@@ -139,7 +139,7 @@ try:
         else:
             st.warning(f"**Sinyal AI: CAUTION / BEARISH** - Model Machine Learning memproyeksikan potensi koreksi harga menuju level Rp {three_day_pred:,.2f} dalam 3 hari ke depan.")
 
-        # --- GRAFIK PLOTLY DENGAN PROYEKSI 3 TITIK HARI KE DEPAN ---
+        # --- GRAFIK PLOTLY DENGAN PROYEKSI 3 HARI KEDEPAN YANG JELAS & REALTIME ---
         st.subheader(f"📊 Grafik Perbandingan & Proyeksi Harga 3 Hari Kedepan ({target_ticker})")
         
         last_date = df.index[-1]
@@ -148,7 +148,7 @@ try:
         else:
             future_dates = pd.date_range(start=last_date + pd.Timedelta(hours=1), periods=3, freq='h')
 
-        # Membentuk 3 tahapan titik harga (Hari 1, Hari 2, Hari 3) secara progresif
+        # Membentuk tahapan titik harga (Hari 1, Hari 2, Hari 3) secara progresif
         step_diff = (three_day_pred - current_price) / 3
         future_prices = [current_price + step_diff * i for i in range(1, 4)]
         
@@ -173,11 +173,15 @@ try:
             mode='lines+markers', 
             name='Proyeksi AI (3 Hari Kedepan)',
             line=dict(color='#2ca02c', width=3, dash='dash'),
-            marker=dict(size=8, color='#2ca02c')
+            marker=dict(size=9, color='#2ca02c')
         ))
         
+        # Mengatur rentang sumbu X agar garis proyeksi 3 hari kedepan terlihat jelas dan tidak terpotong
         fig.update_layout(
-            xaxis_title="Tanggal Perdagangan",
+            xaxis=dict(
+                title="Tanggal Perdagangan",
+                range=[df.index[0], future_dates[-1] + pd.Timedelta(days=1 if interval_val=="1d" else hours=2)]
+            ),
             yaxis_title="Harga (IDR)",
             hovermode="x unified",
             margin=dict(l=20, r=20, t=20, b=20),
@@ -185,7 +189,7 @@ try:
         )
         
         st.plotly_chart(fig, use_container_width=True)
-        st.caption(f"Pembaruan otomatis terakhir pada tanggal {current_date_str} pukul {current_time_str} WIB.")
+        st.caption(f"🔄 Data & Grafik diperbarui secara real-time pada tanggal {current_date_str} pukul {current_time_str} WIB.")
 
     else:
         st.warning("Data saham tidak ditemukan atau pasar sedang tutup.")
@@ -244,9 +248,9 @@ if st.button("🚀 Jalankan Screener Saham Potensial"):
             st.info("Tidak ada emiten liquid yang masuk kriteria ketat saat ini.")
 
 
-# Tautan Cek Platform Eksternal
+# Tautan Cek Platform Eksternal (Sumber Data TradingView, Yahoo Finance, Investing, IDX)
 st.markdown("---")
-st.subheader("🔗 Akses Cepat Grafik Lanjutan")
+st.subheader("🔗 Akses Cepat Grafik & Sumber Data Lanjutan")
 clean_sym = target_ticker.replace(".JK", "")
 
 c1, c2, c3, c4 = st.columns(4)
