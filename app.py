@@ -134,23 +134,39 @@ try:
         else:
             st.warning(f"**Sinyal AI: CAUTION / BEARISH** - Model Machine Learning memproyeksikan potensi koreksi harga menuju level Rp {three_day_pred:,.2f} dalam 3 hari ke depan.")
 
-        # Grafik Perbandingan Menggunakan Plotly (Sumbu X Presisi & Real-time)
-        st.subheader(f"📊 Grafik Perbandingan: Harga Real-Time vs Proyeksi AI 3 Hari ({target_ticker})")
+        # --- GRAFIK PLOTLY DENGAN PROYEKSI MASA DEPAN 3 HARI ---
+        st.subheader(f"📊 Grafik Perbandingan & Proyeksi Harga 3 Hari Kedepan ({target_ticker})")
         
+        # Membuat tanggal masa depan (3 hari kerja berikutnya dari data terakhir)
+        last_date = df.index[-1]
+        if interval_val == "1d":
+            future_dates = pd.bdate_range(start=last_date + pd.Timedelta(days=1), periods=3)
+        else:
+            # Jika interval jam (1h), buat interval per jam ke depan
+            future_dates = pd.date_range(start=last_date + pd.Timedelta(hours=1), periods=3, freq='h')
+
         fig = go.Figure()
+        
+        # 1. Garis Harga Aktual (Real-Time)
         fig.add_trace(go.Scatter(
-            x=ml_df.index, 
-            y=ml_df['Close'], 
+            x=df.index, 
+            y=df['Close'], 
             mode='lines', 
             name='Harga Aktual (Real-Time)',
             line=dict(color='#1f77b4', width=2)
         ))
+        
+        # 2. Garis Proyeksi Masa Depan (Menghubungkan harga terakhir ke titik prediksi 3 hari ke depan)
+        projection_x = [last_date, future_dates[-1]]
+        projection_y = [current_price, three_day_pred]
+        
         fig.add_trace(go.Scatter(
-            x=ml_df.index, 
-            y=ml_df['Predicted_Price'], 
-            mode='lines', 
-            name='Prediksi Model ML (3 Hari)',
-            line=dict(color='#2ca02c', width=2, dash='dash')
+            x=projection_x, 
+            y=projection_y, 
+            mode='lines+markers', 
+            name='Proyeksi AI (3 Hari Kedepan)',
+            line=dict(color='#2ca02c', width=3, dash='dash'),
+            marker=dict(size=8, color='#2ca02c')
         ))
         
         fig.update_layout(
