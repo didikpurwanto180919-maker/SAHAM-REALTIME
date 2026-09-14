@@ -78,6 +78,7 @@ def fetch_stock_data(ticker, period, interval):
     stock = yf.Ticker(ticker)
     df = stock.history(period=period, interval=interval, auto_adjust=True)
     info = stock.info
+    df = df.dropna().sort_index()
     return df, info
 
 try:
