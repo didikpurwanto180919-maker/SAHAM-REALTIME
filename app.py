@@ -29,10 +29,23 @@ def get_idx_universe():
 
 all_tickers = get_idx_universe()
 
-# Sidebar Navigasi dan Pencarian
-st.sidebar.header("🔍 Pengaturan Model ML")
+# Sidebar Navigasi dan Pengaturan Model ML
+st.sidebar.header("🔍 Pengaturan Model ML & Data")
 selected_target = st.sidebar.selectbox("Pilih Emiten Populer:", all_tickers)
 custom_ticker = st.sidebar.text_input("Atau Ketik Kode Saham (contoh: BBCA):", value="")
+
+# Pilihan Interval Waktu untuk Real-Time / Intraday
+timeframe_option = st.sidebar.selectbox(
+    "Pilih Interval Grafik:", 
+    ["1 Hari (Daily - 6 Bulan)", "1 Jam (Hourly - 1 Bulan)"]
+)
+
+if "1 Hari" in timeframe_option:
+    interval_val = "1d"
+    period_val = "6mo"
+else:
+    interval_val = "1h"
+    period_val = "1mo"
 
 target_ticker = custom_ticker.strip().upper() if custom_ticker.strip() else selected_target
 if not target_ticker.endswith(".JK") and target_ticker:
@@ -41,19 +54,23 @@ if not target_ticker.endswith(".JK") and target_ticker:
 if st.sidebar.button("🔄 Perbarui & Prediksi Ulang"):
     st.rerun()
 
-# Fungsi Mengambil Data Historis
+# Fungsi Mengambil Data Historis / Real-Time
 @st.cache_data(ttl=60)
-def fetch_stock_data(ticker):
+def fetch_stock_data(ticker, period, interval):
     stock = yf.Ticker(ticker)
-    df = stock.history(period="6mo", interval="1d")
+    df = stock.history(period=period, interval=interval)
     info = stock.info
     return df, info
 
 try:
-    with st.spinner(f"Menjalankan pemodelan Machine Learning untuk {target_ticker}..."):
-        df, info = fetch_stock_data(target_ticker)
+    with st.spinner(f"Menarik data dan menjalankan Machine Learning untuk {target_ticker}..."):
+        df, info = fetch_stock_data(target_ticker, period_val, interval_val)
         
     if not df.empty:
+        # Menghapus zona waktu pada index agar grafik Streamlit merender tanggal dengan bersih
+        if df.index.tz is not None:
+            df.index = df.index.tz_localize(None)
+
         # Penyiapan Fitur Machine Learning (Regresi Linier)
         df['Prediction_Target'] = df['Close'].shift(-1)
         df['MA5'] = df['Close'].rolling(window=5).mean()
@@ -85,14 +102,14 @@ try:
         # Metrik Atas
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Harga Real-Time", f"Rp {current_price:,.2f}", f"{pct_change:.2f}%")
-        col2.metric("Prediksi ML (Hari Berikutnya)", f"Rp {next_day_pred:,.2f}", f"{pred_change:.2f}%")
+        col2.metric("Prediksi ML (Periode Berikutnya)", f"Rp {next_day_pred:,.2f}", f"{pred_change:.2f}%")
         col3.metric("MA 20", f"Rp {df['MA20'].iloc[-1]:,.2f}")
         col4.metric("Akurasi Model Regresi", "Valid / Optimal")
 
         # Kotak Analisis Sinyal Berbasis ML
         st.subheader("💡 Sinyal Keputusan Swing Trading Berbasis AI")
         if next_day_pred > current_price:
-            st.success(f"**Sinyal AI: BUY / BULLISH** - Model Machine Learning memproyeksikan kenaikan harga ke level Rp {next_day_pred:,.2f} pada sesi perdagangan berikutnya.")
+            st.success(f"**Sinyal AI: BUY / BULLISH** - Model Machine Learning memproyeksikan kenaikan harga ke level Rp {next_day_pred:,.2f} pada sesi berikutnya.")
         else:
             st.warning(f"**Sinyal AI: CAUTION / BEARISH** - Model Machine Learning memproyeksikan potensi koreksi harga menuju level Rp {next_day_pred:,.2f}.")
 
@@ -104,7 +121,7 @@ try:
         st.caption("Garis biru menunjukkan pergerakan harga riwayat asli di pasar, sedangkan garis oranye menunjukkan garis prediksi dari algoritma Machine Learning.")
 
     else:
-        st.warning("Data saham tidak ditemukan.")
+        st.warning("Data saham tidak ditemukan atau pasar sedang libur total.")
 
 except Exception as e:
     st.error(f"Terjadi kesalahan saat memproses model Machine Learning: {e}")
