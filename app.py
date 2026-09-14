@@ -5,6 +5,7 @@ import numpy as np
 import datetime
 from sklearn.linear_model import LinearRegression
 import streamlit.components.v1 as components
+import plotly.graph_objects as go
 
 # Konfigurasi Halaman Streamlit
 st.set_page_config(
@@ -86,7 +87,7 @@ try:
         df, info = fetch_stock_data(target_ticker, period_val, interval_val)
         
     if not df.empty:
-        # Menghapus zona waktu pada index agar grafik Streamlit merender tanggal dengan bersih
+        # Menghapus zona waktu pada index agar grafik merender tanggal dengan bersih
         if df.index.tz is not None:
             df.index = df.index.tz_localize(None)
 
@@ -133,11 +134,34 @@ try:
         else:
             st.warning(f"**Sinyal AI: CAUTION / BEARISH** - Model Machine Learning memproyeksikan potensi koreksi harga menuju level Rp {three_day_pred:,.2f} dalam 3 hari ke depan.")
 
-        # Grafik Perbandingan
-        st.subheader(f"📊 Grafik Perbandingan: Harga Real-Time (Aktual) vs Proyeksi AI 3 Hari ({target_ticker})")
-        comparison_chart = ml_df[['Close', 'Predicted_Price']]
-        comparison_chart.columns = ['Harga Aktual (Real-Time)', 'Prediksi Model ML (3 Hari)']
-        st.line_chart(comparison_chart, use_container_width=True)
+        # Grafik Perbandingan Menggunakan Plotly (Sumbu X Presisi & Real-time)
+        st.subheader(f"📊 Grafik Perbandingan: Harga Real-Time vs Proyeksi AI 3 Hari ({target_ticker})")
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=ml_df.index, 
+            y=ml_df['Close'], 
+            mode='lines', 
+            name='Harga Aktual (Real-Time)',
+            line=dict(color='#1f77b4', width=2)
+        ))
+        fig.add_trace(go.Scatter(
+            x=ml_df.index, 
+            y=ml_df['Predicted_Price'], 
+            mode='lines', 
+            name='Prediksi Model ML (3 Hari)',
+            line=dict(color='#2ca02c', width=2, dash='dash')
+        ))
+        
+        fig.update_layout(
+            xaxis_title="Tanggal Perdagangan",
+            yaxis_title="Harga (IDR)",
+            hovermode="x unified",
+            margin=dict(l=20, r=20, t=20, b=20),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
         st.caption(f"Pembaruan otomatis terakhir pada tanggal {current_date_str} pukul {current_time_str} WIB.")
 
     else:
