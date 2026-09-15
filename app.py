@@ -79,7 +79,7 @@ custom_ticker = st.sidebar.text_input("Atau Ketik Kode Saham (contoh: CUAN):", v
 
 timeframe_option = st.sidebar.selectbox(
     "Pilih Interval Grafik:", 
-    ["1 Hari (Daily - 120 Hari)", "1 Jam (Hourly - 1 Bulan)"]
+    ["1 Menit (Intraday - 7 Hari)", "1 Jam (Hourly - 1 Bulan)", "1 Hari (Daily - 120 Hari)"]
 )
 
 horizon_option = st.sidebar.selectbox(
@@ -88,12 +88,15 @@ horizon_option = st.sidebar.selectbox(
 )
 prediction_days = 7 if "1 Minggu" in horizon_option else 3
 
-if "1 Hari" in timeframe_option:
-    interval_val = "1d"
-    period_val = "120d"
-else:
+if "1 Menit" in timeframe_option:
+    interval_val = "1m"
+    period_val = "7d"
+elif "1 Jam" in timeframe_option:
     interval_val = "1h"
     period_val = "1mo"
+else:
+    interval_val = "1d"
+    period_val = "120d"
 
 target_ticker = custom_ticker.strip().upper() if custom_ticker.strip() else selected_target
 if not target_ticker.endswith(".JK") and target_ticker:
@@ -106,11 +109,15 @@ if st.sidebar.button("🔄 Perbarui & Prediksi Ulang Sekarang"):
 current_date_str = str(datetime.date.today())
 current_time_str = datetime.datetime.now().strftime("%H:%M:%S")
 
-@st.cache_data(ttl=60)
+# Menggunakan TTL 5 detik agar data online selalu diperbarui secara real-time
+@st.cache_data(ttl=5)
 def fetch_stock_data(ticker, period, interval):
     stock = yf.Ticker(ticker)
     df = stock.history(period=period, interval=interval, auto_adjust=True)
-    info = stock.info
+    try:
+        info = stock.info
+    except Exception:
+        info = {}
     if not df.empty:
         df = df.dropna().sort_index()
     return df, info
@@ -159,7 +166,7 @@ try:
         df_ml = df_ml.dropna()
 
         if len(df_ml) < 20:
-            st.warning("Data bersih terlalu sedikit setelah pembersihan indikator. Perpanjang periode data di sidebar.")
+            st.warning("Data bersih terlalu sedikit setelah pembersihan indikator. Perpanjang periode data di sidebar atau ubah interval.")
         else:
             feature_cols = ['MA5', 'MA20', 'Volume', 'RSI', 'MACD', 'BB_Width', 'ATR']
             X = df_ml[feature_cols]
@@ -248,8 +255,10 @@ try:
             last_date = df.index[-1]
             if interval_val == "1d":
                 future_dates = pd.bdate_range(start=last_date + pd.Timedelta(days=1), periods=prediction_days)
-            else:
+            elif interval_val == "1h":
                 future_dates = pd.date_range(start=last_date + pd.Timedelta(hours=1), periods=prediction_days, freq='h')
+            else:
+                future_dates = pd.date_range(start=last_date + pd.Timedelta(minutes=1), periods=prediction_days, freq='min')
 
             step_diff = (target_pred - current_price) / prediction_days
             future_prices = [current_price + step_diff * i for i in range(1, prediction_days + 1)]
@@ -278,8 +287,8 @@ try:
             
             fig.update_layout(
                 xaxis=dict(
-                    title="Tanggal Perdagangan",
-                    range=[df.index[0], future_dates[-1] + pd.Timedelta(days=1 if interval_val=="1d" else 2)]
+                    title="Tanggal / Waktu Perdagangan",
+                    range=[df.index[0], future_dates[-1] + (pd.Timedelta(days=1) if interval_val=="1d" else pd.Timedelta(hours=2))]
                 ),
                 yaxis_title="Harga (IDR)",
                 hovermode="x unified",
@@ -291,7 +300,7 @@ try:
             st.caption(f"🔄 Data & Sinyal Alarm diperbarui secara real-time pada tanggal {current_date_str} pukul {current_time_str} WIB.")
 
     else:
-        st.warning("Data historis tidak mencukupi untuk horizon prediksi ini.")
+        st.warning("Data historis tidak mencukupi untuk horizon prediksi ini. Silakan pilih interval atau emiten lain.")
 
 except Exception as e:
     st.error(f"Terjadi kesalahan saat memproses model Machine Learning: {e}")
