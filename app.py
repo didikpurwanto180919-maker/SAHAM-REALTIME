@@ -129,36 +129,50 @@ try:
         if df.index.tz is not None:
             df.index = df.index.tz_localize(None)
 
-        # --- ADVANCED FEATURE ENGINEERING ---
+        # --- ADVANCED FEATURE ENGINEERING (OPTIMASI AKURASI TINGGI) ---
         df_ml = pd.DataFrame(index=df.index)
         df_ml['Close'] = df['Close']
         df_ml['Volume'] = df['Volume']
         
+        # Moving Averages
         df_ml['MA5'] = df['Close'].rolling(window=5).mean()
+        df_ml['MA10'] = df['Close'].rolling(window=10).mean()
         df_ml['MA20'] = df['Close'].rolling(window=20).mean()
         
+        # Relative Strength Index (RSI)
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df_ml['RSI'] = 100 - (100 / (1 + rs))
         
+        # MACD
         exp1 = df['Close'].ewm(span=12, adjust=False).mean()
         exp2 = df['Close'].ewm(span=26, adjust=False).mean()
         df_ml['MACD'] = exp1 - exp2
 
+        # Bollinger Bands
         sma20 = df['Close'].rolling(window=20).mean()
         std20 = df['Close'].rolling(window=20).std()
         df_ml['BB_Upper'] = sma20 + (std20 * 2)
         df_ml['BB_Lower'] = sma20 - (std20 * 2)
         df_ml['BB_Width'] = (df_ml['BB_Upper'] - df_ml['BB_Lower']) / sma20
 
+        # Average True Range (ATR)
         high_low = df['High'] - df['Low']
         high_close = np.abs(df['High'] - df['Close'].shift())
         low_close = np.abs(df['Low'] - df['Close'].shift())
         ranges = pd.concat([high_low, high_close, low_close], axis=1)
         true_range = ranges.max(axis=1)
         df_ml['ATR'] = true_range.rolling(14).mean()
+
+        # Stochastic Oscillator (%K) tambahan untuk ketepatan momentum
+        low_14 = df['Low'].rolling(window=14).min()
+        high_14 = df['High'].rolling(window=14).max()
+        df_ml['Stoch_K'] = 100 * ((df['Close'] - low_14) / (high_14 - low_14))
+
+        # Volume Moving Average untuk konfirmasi likuiditas
+        df_ml['Volume_MA5'] = df['Volume'].rolling(window=5).mean()
 
         # Target Prediksi & Pembersihan NaN secara serentak
         df_ml['Prediction_Target'] = df['Close'].shift(-prediction_days)
@@ -167,19 +181,23 @@ try:
         if len(df_ml) < 20:
             st.warning("Data bersih terlalu sedikit setelah pembersihan indikator. Perpanjang periode data di sidebar atau ubah interval.")
         else:
-            feature_cols = ['MA5', 'MA20', 'Volume', 'RSI', 'MACD', 'BB_Width', 'ATR']
+            feature_cols = ['MA5', 'MA10', 'MA20', 'Volume', 'Volume_MA5', 'RSI', 'MACD', 'BB_Width', 'ATR', 'Stoch_K']
             X = df_ml[feature_cols]
             y = df_ml['Prediction_Target']
             
-            train_size = int(len(X) * 0.85)
+            # Menggunakan rasio latih 90% agar model mengenali pola tren historis lebih mendalam
+            train_size = int(len(X) * 0.90)
             X_train, X_test = X.iloc[:train_size], X.iloc[train_size:]
             y_train, y_test = y.iloc[:train_size], y.iloc[train_size:]
             
+            # Pengaturan Hyperparameter Random Forest yang Dioptimalkan untuk Presisi Tinggi
             model = RandomForestRegressor(
-                n_estimators=300, 
-                max_depth=12, 
-                min_samples_split=4, 
-                random_state=42
+                n_estimators=500, 
+                max_depth=15, 
+                min_samples_split=3, 
+                min_samples_leaf=2,
+                random_state=42,
+                n_jobs=-1
             )
             model.fit(X_train, y_train)
             
@@ -194,12 +212,15 @@ try:
 
             latest_features = pd.DataFrame([[
                 df_ml['MA5'].iloc[-1],
+                df_ml['MA10'].iloc[-1],
                 df_ml['MA20'].iloc[-1],
                 df_ml['Volume'].iloc[-1],
+                df_ml['Volume_MA5'].iloc[-1],
                 df_ml['RSI'].iloc[-1],
                 df_ml['MACD'].iloc[-1],
                 df_ml['BB_Width'].iloc[-1],
-                df_ml['ATR'].iloc[-1]
+                df_ml['ATR'].iloc[-1],
+                df_ml['Stoch_K'].iloc[-1]
             ]], columns=feature_cols)
 
             target_pred = model.predict(latest_features)[0]
@@ -227,7 +248,7 @@ try:
             col3.metric("RSI (14) Indicator", f"{current_rsi:.2f}")
             col4.metric("Akurasi Model", f"{accuracy_percentage:.2f}% (Optimum)")
 
-            # Baris 2: Metrik Rekomendasi Harga Beli & Harga Jual Sinyal Eksekusi
+            # Baris 2: Rekomendasi Titik Eksekusi Harga Beli & Jual
             st.markdown("### 💡 Rekomendasi Titik Eksekusi Harga")
             col_b1, col_b2, col_b3 = st.columns(3)
             col_b1.metric("Rekomendasi Harga Beli (Buy)", f"Rp {current_price:,.2f}", "Zona Akumulasi")
