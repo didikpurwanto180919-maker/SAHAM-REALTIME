@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Script Auto-Refresh Setiap 1 Detik & Notifikasi Alarm Suara Otomatis
+# Script Auto-Refresh Setiap 5 Detik & Notifikasi Alarm Suara Otomatis
 components.html(
     """
     <script>
@@ -36,10 +36,10 @@ components.html(
         }
         setTimeout(playAlertTone, 1000);
 
-        // Auto-refresh halaman setiap 1 detik (1000 milidetik) untuk real-time online
+        // Auto-refresh halaman setiap 5 detik (5000 milidetik) untuk real-time online yang stabil
         setTimeout(function(){
             window.location.reload();
-        }, 1000); 
+        }, 5000); 
     </script>
     """,
     height=0,
@@ -110,8 +110,8 @@ if st.sidebar.button("🔄 Perbarui & Prediksi Ulang Sekarang"):
 current_date_str = str(datetime.date.today())
 current_time_str = datetime.datetime.now().strftime("%H:%M:%S")
 
-# TTL diatur ke 1 detik agar sinkron dengan auto-refresh
-@st.cache_data(ttl=1)
+# TTL diatur ke 5 detik agar sinkron dengan auto-refresh 5 detik
+@st.cache_data(ttl=5)
 def fetch_stock_data(ticker, period, interval):
     stock = yf.Ticker(ticker)
     df = stock.history(period=period, interval=interval, auto_adjust=True)
@@ -316,7 +316,7 @@ try:
             )
             
             st.plotly_chart(fig, use_container_width=True)
-            st.caption(f"🔄 Data & Sinyal Alarm diperbarui secara otomatis setiap 1 detik pada tanggal {current_date_str} pukul {current_time_str} WIB.")
+            st.caption(f"🔄 Data & Sinyal Alarm diperbarui secara otomatis setiap 5 detik pada tanggal {current_date_str} pukul {current_time_str} WIB.")
 
     else:
         st.warning("Data historis tidak mencukupi untuk horizon prediksi ini. Silakan pilih interval atau emiten lain.")
