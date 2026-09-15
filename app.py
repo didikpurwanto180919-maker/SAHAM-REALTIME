@@ -109,7 +109,6 @@ if st.sidebar.button("🔄 Perbarui & Prediksi Ulang Sekarang"):
 current_date_str = str(datetime.date.today())
 current_time_str = datetime.datetime.now().strftime("%H:%M:%S")
 
-# Menggunakan TTL 5 detik agar data online selalu diperbarui secara real-time
 @st.cache_data(ttl=5)
 def fetch_stock_data(ticker, period, interval):
     stock = yf.Ticker(ticker)
@@ -221,11 +220,19 @@ try:
                 target_sell = current_price
                 stop_loss = current_price * 0.97
 
+            # Baris 1: Metrik Utama Pasar & AI
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Harga Real-Time", f"Rp {current_price:,.2f}", f"{pct_change:.2f}%")
             col2.metric(f"Prediksi ML ({prediction_days} Hari)", f"Rp {target_pred:,.2f}", f"{pred_change:.2f}%")
             col3.metric("RSI (14) Indicator", f"{current_rsi:.2f}")
             col4.metric("Akurasi Model", f"{accuracy_percentage:.2f}% (Optimum)")
+
+            # Baris 2: Metrik Rekomendasi Harga Beli & Harga Jual Sinyal Eksekusi
+            st.markdown("### 💡 Rekomendasi Titik Eksekusi Harga")
+            col_b1, col_b2, col_b3 = st.columns(3)
+            col_b1.metric("Rekomendasi Harga Beli (Buy)", f"Rp {current_price:,.2f}", "Zona Akumulasi")
+            col_b2.metric("Target Harga Jual (Take Profit)", f"Rp {target_sell:,.2f}", f"+{((target_sell - current_price)/current_price)*100:.2f}%")
+            col_b3.metric("Batas Risiko (Stop Loss)", f"Rp {stop_loss:,.2f}", "Berbasis ATR Volatilitas")
 
             st.subheader("🚨 Alarm Sinyal Eksekusi Trading (Beli & Jual)")
             if "STRONG BUY" in action_signal:
