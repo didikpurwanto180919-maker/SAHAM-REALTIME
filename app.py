@@ -2,7 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import datetime
+from datetime import datetime, timezone, timedelta
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_percentage_error
 import streamlit.components.v1 as components
@@ -146,8 +146,11 @@ if st.sidebar.button("🔄 Segarkan Data & Prediksi Sekarang", use_container_wid
     st.cache_data.clear()
     st.rerun()
 
-current_date_str = str(datetime.date.today())
-current_time_str = datetime.datetime.now().strftime("%H:%M:%S")
+# Waktu Real-Time Akurat Zona Waktu Indonesia Barat (WIB / UTC+7)
+wib_zone = timezone(timedelta(hours=7))
+wib_time = datetime.now(wib_zone)
+current_date_str = wib_time.strftime("%Y-%m-%d")
+current_time_str = wib_time.strftime("%H:%M:%S")
 
 # TTL diatur ke 5 detik agar sinkron dengan auto-refresh
 @st.cache_data(ttl=5)
