@@ -15,24 +15,37 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS untuk Mempercantik Tampilan Dashboard (UI/UX Terbaik)
+# Custom CSS untuk Membuat Teks & Angka "Menyala" (Glow Effect) dan Elegan
 st.markdown("""
     <style>
     .main {
-        background-color: #0e1117;
+        background-color: #0b0f19;
     }
-    .stMetric {
-        background-color: #161b22;
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid #30363d;
+    /* Efek Kartu Menyala & Modern */
+    div.stMetric {
+        background: linear-gradient(135deg, #161b22 0%, #1f242d 100%) !important;
+        padding: 20px !important;
+        border-radius: 14px !important;
+        border: 1px solid #30363d !important;
+        box-shadow: 0 4px 20px rgba(0, 210, 255, 0.08);
+        transition: all 0.3s ease-in-out;
     }
-    .metric-card {
-        background-color: #161b22;
-        border: 1px solid #30363d;
-        padding: 20px;
-        border-radius: 12px;
-        text-align: center;
+    div.stMetric:hover {
+        border-color: #00d2ff !important;
+        box-shadow: 0 4px 25px rgba(0, 210, 255, 0.25);
+    }
+    /* Angka Utama Dibuat Tebal & Menyala */
+    [data-testid="stMetricValue"] {
+        font-size: 28px !important;
+        font-weight: 800 !important;
+        color: #00ffcc !important;
+        text-shadow: 0 0 12px rgba(0, 255, 204, 0.4);
+    }
+    /* Label Metrik */
+    [data-testid="stMetricLabel"] {
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        color: #c9d1d9 !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -68,7 +81,7 @@ components.html(
     height=0,
 )
 
-# Judul Utama Dashboard dengan Desain Bersih
+# Judul Utama Dashboard
 st.title("🚀 AI & Machine Learning Presisi Tinggi: Real-Time IDX Dashboard")
 st.markdown(
     "Dashboard analisis prediktif berbasis *Random Forest Machine Learning* tingkat lanjut dengan indikator volatilitas "
@@ -93,7 +106,7 @@ def get_idx_universe():
         "ASII.JK", "UNVR.JK", "ICBP.JK", "INDF.JK", "GOTO.JK", 
         "ADRO.JK", "PTBA.JK", "ANTM.JK", "MDKA.JK", "UNTR.JK", 
         "KLBF.JK", "SMGR.JK", "CPIN.JK", "INKP.JK", "MEDC.JK",
-        "ARTO.JK", "BRIS.JK", "PGAS.JK", "BUKA.JK", "JSMR.JK", "CUAN.JK"
+        "ARTO.JK", "BRIS.JK", "PGAS.JK", "BUKA.JK", "JSMR.JK", "CUAN.JK", "INCO.JK"
     ]
 
 all_tickers = get_idx_universe()
@@ -101,7 +114,7 @@ all_tickers = get_idx_universe()
 # Sidebar Navigasi dan Pengaturan Model ML
 st.sidebar.header("🎛️ Panel Kontrol & Pengaturan")
 selected_target = st.sidebar.selectbox("Pilih Emiten:", all_tickers)
-custom_ticker = st.sidebar.text_input("Atau Ketik Kode Saham (contoh: BBCA):", value="")
+custom_ticker = st.sidebar.text_input("Atau Ketik Kode Saham (contoh: INCO):", value="")
 
 timeframe_option = st.sidebar.selectbox(
     "Pilih Interval Grafik:", 
@@ -258,7 +271,7 @@ try:
                 target_sell = current_price
                 stop_loss = current_price * 0.97
 
-            # --- TAMPILAN DASHBOARD UTAMA (GRID MODERN) ---
+            # --- TAMPILAN DASHBOARD UTAMA DENGAN ANGKA MENYALA ---
             st.subheader(f"📊 Ringkasan Pasar Real-Time: {target_ticker}")
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Harga Real-Time", f"Rp {current_price:,.2f}", f"{pct_change:+.2f}%")
@@ -298,7 +311,7 @@ try:
 
             st.markdown("---")
 
-            # Bagian Grafik Interaktif Plotly yang Elegan
+            # Bagian Grafik Interaktif Plotly
             st.subheader(f"📈 Grafik Pergerakan & Proyeksi AI Interaktif")
             
             last_date = df.index[-1]
@@ -317,7 +330,6 @@ try:
 
             fig = go.Figure()
             
-            # Grafik Harga Aktual
             fig.add_trace(go.Scatter(
                 x=df.index, 
                 y=df['Close'], 
@@ -326,14 +338,13 @@ try:
                 line=dict(color='#00d2ff', width=2.5)
             ))
             
-            # Grafik Proyeksi AI
             fig.add_trace(go.Scatter(
                 x=projection_x, 
                 y=projection_y, 
                 mode='lines+markers', 
                 name=f'Proyeksi AI ({prediction_days} Hari)',
-                line=dict(color='#00ff87', width=3, dash='dash'),
-                marker=dict(size=8, color='#00ff87')
+                line=dict(color='#00ffcc', width=3, dash='dash'),
+                marker=dict(size=8, color='#00ffcc')
             ))
             
             fig.update_layout(
@@ -343,8 +354,8 @@ try:
                 hovermode="x unified",
                 margin=dict(l=10, r=10, t=10, b=10),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                plot_bgcolor="#0e1117",
-                paper_bgcolor="#0e1117"
+                plot_bgcolor="#0b0f19",
+                paper_bgcolor="#0b0f19"
             )
             
             st.plotly_chart(fig, use_container_width=True)
