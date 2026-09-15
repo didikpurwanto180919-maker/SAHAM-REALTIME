@@ -25,11 +25,11 @@ components.html(
                 let gain = ctx.createGain();
                 osc.type = 'sine';
                 osc.frequency.value = 587.33; 
-                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                gain.gain.setValueAtTime(0.05, ctx.currentTime);
                 osc.connect(gain);
                 gain.connect(ctx.destination);
                 osc.start();
-                osc.stop(ctx.currentTime + 0.3);
+                osc.stop(ctx.currentTime + 0.2);
             } catch(e) {
                 console.log("Audio context blocked by browser policy");
             }
@@ -50,22 +50,25 @@ st.markdown(
     "(Bollinger Bands, ATR, Stochastic) untuk rekomendasi eksekusi **BELI (BUY)** dan **JUAL (SELL)** berakurasi tinggi."
 )
 
-# Memuat Daftar Seluruh Emiten IDX Secara Otomatis
+# Memuat Daftar Seluruh Emiten IDX Secara Otomatis dengan Fallback Aman
 @st.cache_data(ttl=86400)
 def get_idx_universe():
     try:
         url = "https://raw.githubusercontent.com/wildangunawan/Dataset-Saham-IDX/master/List%20Emiten/all_emiten.csv"
         df_emiten = pd.read_csv(url)
-        tickers = [str(code).strip().upper() + ".JK" for code in df_emiten['Code'].dropna().unique()]
-        return sorted(tickers)
+        if 'Code' in df_emiten.columns:
+            tickers = [str(code).strip().upper() + ".JK" for code in df_emiten['Code'].dropna().unique()]
+            return sorted(tickers)
     except Exception:
-        return [
-            "BBCA.JK", "BBRI.JK", "BMRI.JK", "BBNI.JK", "TLKM.JK", 
-            "ASII.JK", "UNVR.JK", "ICBP.JK", "INDF.JK", "GOTO.JK", 
-            "ADRO.JK", "PTBA.JK", "ANTM.JK", "MDKA.JK", "UNTR.JK", 
-            "KLBF.JK", "SMGR.JK", "CPIN.JK", "INKP.JK", "MEDC.JK",
-            "ARTO.JK", "BRIS.JK", "PGAS.JK", "BUKA.JK", "JSMR.JK", "CUAN.JK"
-        ]
+        pass
+    
+    return [
+        "BBCA.JK", "BBRI.JK", "BMRI.JK", "BBNI.JK", "TLKM.JK", 
+        "ASII.JK", "UNVR.JK", "ICBP.JK", "INDF.JK", "GOTO.JK", 
+        "ADRO.JK", "PTBA.JK", "ANTM.JK", "MDKA.JK", "UNTR.JK", 
+        "KLBF.JK", "SMGR.JK", "CPIN.JK", "INKP.JK", "MEDC.JK",
+        "ARTO.JK", "BRIS.JK", "PGAS.JK", "BUKA.JK", "JSMR.JK", "CUAN.JK"
+    ]
 
 all_tickers = get_idx_universe()
 
@@ -103,12 +106,13 @@ if st.sidebar.button("🔄 Perbarui & Prediksi Ulang Sekarang"):
 current_date_str = str(datetime.date.today())
 current_time_str = datetime.datetime.now().strftime("%H:%M:%S")
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=60)
 def fetch_stock_data(ticker, period, interval):
     stock = yf.Ticker(ticker)
     df = stock.history(period=period, interval=interval, auto_adjust=True)
     info = stock.info
-    df = df.dropna().sort_index()
+    if not df.empty:
+        df = df.dropna().sort_index()
     return df, info
 
 try:
