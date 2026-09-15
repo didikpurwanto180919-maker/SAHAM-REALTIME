@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Script Auto-Refresh & Notifikasi Alarm Suara Otomatis
+# Script Auto-Refresh Setiap 1 Detik & Notifikasi Alarm Suara Otomatis
 components.html(
     """
     <script>
@@ -36,9 +36,10 @@ components.html(
         }
         setTimeout(playAlertTone, 1000);
 
+        // Auto-refresh halaman setiap 1 detik (1000 milidetik) untuk real-time online
         setTimeout(function(){
             window.location.reload();
-        }, 60000); 
+        }, 1000); 
     </script>
     """,
     height=0,
@@ -109,7 +110,8 @@ if st.sidebar.button("🔄 Perbarui & Prediksi Ulang Sekarang"):
 current_date_str = str(datetime.date.today())
 current_time_str = datetime.datetime.now().strftime("%H:%M:%S")
 
-@st.cache_data(ttl=5)
+# TTL diatur ke 1 detik agar sinkron dengan auto-refresh
+@st.cache_data(ttl=1)
 def fetch_stock_data(ticker, period, interval):
     stock = yf.Ticker(ticker)
     df = stock.history(period=period, interval=interval, auto_adjust=True)
@@ -134,31 +136,26 @@ try:
         df_ml['Close'] = df['Close']
         df_ml['Volume'] = df['Volume']
         
-        # Moving Averages
         df_ml['MA5'] = df['Close'].rolling(window=5).mean()
         df_ml['MA10'] = df['Close'].rolling(window=10).mean()
         df_ml['MA20'] = df['Close'].rolling(window=20).mean()
         
-        # Relative Strength Index (RSI)
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df_ml['RSI'] = 100 - (100 / (1 + rs))
         
-        # MACD
         exp1 = df['Close'].ewm(span=12, adjust=False).mean()
         exp2 = df['Close'].ewm(span=26, adjust=False).mean()
         df_ml['MACD'] = exp1 - exp2
 
-        # Bollinger Bands
         sma20 = df['Close'].rolling(window=20).mean()
         std20 = df['Close'].rolling(window=20).std()
         df_ml['BB_Upper'] = sma20 + (std20 * 2)
         df_ml['BB_Lower'] = sma20 - (std20 * 2)
         df_ml['BB_Width'] = (df_ml['BB_Upper'] - df_ml['BB_Lower']) / sma20
 
-        # Average True Range (ATR)
         high_low = df['High'] - df['Low']
         high_close = np.abs(df['High'] - df['Close'].shift())
         low_close = np.abs(df['Low'] - df['Close'].shift())
@@ -166,15 +163,11 @@ try:
         true_range = ranges.max(axis=1)
         df_ml['ATR'] = true_range.rolling(14).mean()
 
-        # Stochastic Oscillator (%K) tambahan untuk ketepatan momentum
         low_14 = df['Low'].rolling(window=14).min()
         high_14 = df['High'].rolling(window=14).max()
         df_ml['Stoch_K'] = 100 * ((df['Close'] - low_14) / (high_14 - low_14))
-
-        # Volume Moving Average untuk konfirmasi likuiditas
         df_ml['Volume_MA5'] = df['Volume'].rolling(window=5).mean()
 
-        # Target Prediksi & Pembersihan NaN secara serentak
         df_ml['Prediction_Target'] = df['Close'].shift(-prediction_days)
         df_ml = df_ml.dropna()
 
@@ -185,12 +178,10 @@ try:
             X = df_ml[feature_cols]
             y = df_ml['Prediction_Target']
             
-            # Menggunakan rasio latih 90% agar model mengenali pola tren historis lebih mendalam
             train_size = int(len(X) * 0.90)
             X_train, X_test = X.iloc[:train_size], X.iloc[train_size:]
             y_train, y_test = y.iloc[:train_size], y.iloc[train_size:]
             
-            # Pengaturan Hyperparameter Random Forest yang Dioptimalkan untuk Presisi Tinggi
             model = RandomForestRegressor(
                 n_estimators=500, 
                 max_depth=15, 
@@ -325,7 +316,7 @@ try:
             )
             
             st.plotly_chart(fig, use_container_width=True)
-            st.caption(f"🔄 Data & Sinyal Alarm diperbarui secara real-time pada tanggal {current_date_str} pukul {current_time_str} WIB.")
+            st.caption(f"🔄 Data & Sinyal Alarm diperbarui secara otomatis setiap 1 detik pada tanggal {current_date_str} pukul {current_time_str} WIB.")
 
     else:
         st.warning("Data historis tidak mencukupi untuk horizon prediksi ini. Silakan pilih interval atau emiten lain.")
