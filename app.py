@@ -10,9 +10,32 @@ import plotly.graph_objects as go
 
 # Konfigurasi Halaman Streamlit
 st.set_page_config(
-    page_title="Dashboard Prediksi ML Swing Trading IDX Pro", 
+    page_title="Dashboard Pro: AI Saham IDX Real-Time", 
+    page_icon="📈",
     layout="wide"
 )
+
+# Custom CSS untuk Mempercantik Tampilan Dashboard (UI/UX Terbaik)
+st.markdown("""
+    <style>
+    .main {
+        background-color: #0e1117;
+    }
+    .stMetric {
+        background-color: #161b22;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #30363d;
+    }
+    .metric-card {
+        background-color: #161b22;
+        border: 1px solid #30363d;
+        padding: 20px;
+        border-radius: 12px;
+        text-align: center;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # Script Auto-Refresh Setiap 5 Detik & Notifikasi Alarm Suara Otomatis
 components.html(
@@ -25,11 +48,11 @@ components.html(
                 let gain = ctx.createGain();
                 osc.type = 'sine';
                 osc.frequency.value = 587.33; 
-                gain.gain.setValueAtTime(0.05, ctx.currentTime);
+                gain.gain.setValueAtTime(0.03, ctx.currentTime);
                 osc.connect(gain);
                 gain.connect(ctx.destination);
                 osc.start();
-                osc.stop(ctx.currentTime + 0.2);
+                osc.stop(ctx.currentTime + 0.15);
             } catch(e) {
                 console.log("Audio context blocked by browser policy");
             }
@@ -45,11 +68,13 @@ components.html(
     height=0,
 )
 
-st.title("🤖 AI & Machine Learning Presisi Tinggi: Prediksi Saham IDX & Sinyal Aksi")
+# Judul Utama Dashboard dengan Desain Bersih
+st.title("🚀 AI & Machine Learning Presisi Tinggi: Real-Time IDX Dashboard")
 st.markdown(
-    "Dashboard analisis prediktif berbasis *Random Forest Machine Learning* yang dilengkapi indikator volatilitas lanjutan "
-    "(Bollinger Bands, ATR, Stochastic) untuk rekomendasi eksekusi **BELI (BUY)** dan **JUAL (SELL)** berakurasi tinggi."
+    "Dashboard analisis prediktif berbasis *Random Forest Machine Learning* tingkat lanjut dengan indikator volatilitas "
+    "(Bollinger Bands, ATR, Stochastic) untuk rekomendasi eksekusi **BELI (BUY)** dan **JUAL (SELL)** secara *real-time*."
 )
+st.markdown("---")
 
 # Memuat Daftar Seluruh Emiten IDX Secara Otomatis dengan Fallback Aman
 @st.cache_data(ttl=86400)
@@ -74,9 +99,9 @@ def get_idx_universe():
 all_tickers = get_idx_universe()
 
 # Sidebar Navigasi dan Pengaturan Model ML
-st.sidebar.header("🔍 Pengaturan Model ML & Data")
+st.sidebar.header("🎛️ Panel Kontrol & Pengaturan")
 selected_target = st.sidebar.selectbox("Pilih Emiten:", all_tickers)
-custom_ticker = st.sidebar.text_input("Atau Ketik Kode Saham (contoh: CUAN):", value="")
+custom_ticker = st.sidebar.text_input("Atau Ketik Kode Saham (contoh: BBCA):", value="")
 
 timeframe_option = st.sidebar.selectbox(
     "Pilih Interval Grafik:", 
@@ -103,14 +128,15 @@ target_ticker = custom_ticker.strip().upper() if custom_ticker.strip() else sele
 if not target_ticker.endswith(".JK") and target_ticker:
     target_ticker += ".JK"
 
-if st.sidebar.button("🔄 Perbarui & Prediksi Ulang Sekarang"):
+st.sidebar.markdown("---")
+if st.sidebar.button("🔄 Segarkan Data & Prediksi Sekarang", use_container_width=True):
     st.cache_data.clear()
     st.rerun()
 
 current_date_str = str(datetime.date.today())
 current_time_str = datetime.datetime.now().strftime("%H:%M:%S")
 
-# TTL diatur ke 5 detik agar sinkron dengan auto-refresh 5 detik
+# TTL diatur ke 5 detik agar sinkron dengan auto-refresh
 @st.cache_data(ttl=5)
 def fetch_stock_data(ticker, period, interval):
     stock = yf.Ticker(ticker)
@@ -124,14 +150,14 @@ def fetch_stock_data(ticker, period, interval):
     return df, info
 
 try:
-    with st.spinner(f"Menarik data real-time & kalkulasi presisi tinggi untuk {target_ticker}..."):
+    with st.spinner(f"Menarik data online real-time & memproses model AI untuk {target_ticker}..."):
         df, info = fetch_stock_data(target_ticker, period_val, interval_val)
         
     if not df.empty and len(df) > (prediction_days + 40):
         if df.index.tz is not None:
             df.index = df.index.tz_localize(None)
 
-        # --- ADVANCED FEATURE ENGINEERING (OPTIMASI AKURASI TINGGI) ---
+        # --- ADVANCED FEATURE ENGINEERING ---
         df_ml = pd.DataFrame(index=df.index)
         df_ml['Close'] = df['Close']
         df_ml['Volume'] = df['Volume']
@@ -172,7 +198,7 @@ try:
         df_ml = df_ml.dropna()
 
         if len(df_ml) < 20:
-            st.warning("Data bersih terlalu sedikit setelah pembersihan indikator. Perpanjang periode data di sidebar atau ubah interval.")
+            st.warning("Data bersih terlalu sedikit. Perpanjang periode data di sidebar.")
         else:
             feature_cols = ['MA5', 'MA10', 'MA20', 'Volume', 'Volume_MA5', 'RSI', 'MACD', 'BB_Width', 'ATR', 'Stoch_K']
             X = df_ml[feature_cols]
@@ -220,56 +246,60 @@ try:
             current_atr = df_ml['ATR'].iloc[-1]
 
             if target_pred > current_price and current_rsi < 65:
-                action_signal = "STRONG BUY (WAKTU BELI UTAMA)"
+                action_signal = "STRONG BUY"
                 target_sell = target_pred * 1.03 
                 stop_loss = current_price - (1.5 * current_atr)   
             elif target_pred > current_price:
-                action_signal = "HOLD / CAUTION BUY"
+                action_signal = "HOLD / CAUTION"
                 target_sell = target_pred
                 stop_loss = current_price - (1.5 * current_atr)
             else:
-                action_signal = "SELL / TAKE PROFIT (WAKTU JUAL)"
+                action_signal = "SELL / TAKE PROFIT"
                 target_sell = current_price
                 stop_loss = current_price * 0.97
 
-            # Baris 1: Metrik Utama Pasar & AI
+            # --- TAMPILAN DASHBOARD UTAMA (GRID MODERN) ---
+            st.subheader(f"📊 Ringkasan Pasar Real-Time: {target_ticker}")
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Harga Real-Time", f"Rp {current_price:,.2f}", f"{pct_change:.2f}%")
-            col2.metric(f"Prediksi ML ({prediction_days} Hari)", f"Rp {target_pred:,.2f}", f"{pred_change:.2f}%")
-            col3.metric("RSI (14) Indicator", f"{current_rsi:.2f}")
-            col4.metric("Akurasi Model", f"{accuracy_percentage:.2f}% (Optimum)")
+            col1.metric("Harga Real-Time", f"Rp {current_price:,.2f}", f"{pct_change:+.2f}%")
+            col2.metric(f"Prediksi AI ({prediction_days} Hari)", f"Rp {target_pred:,.2f}", f"{pred_change:+.2f}%")
+            col3.metric("Indikator RSI (14)", f"{current_rsi:.2f}", "Netral/Momentum")
+            col4.metric("Akurasi Model ML", f"{accuracy_percentage:.2f}%", "High Confidence")
 
-            # Baris 2: Rekomendasi Titik Eksekusi Harga Beli & Jual
-            st.markdown("### 💡 Rekomendasi Titik Eksekusi Harga")
+            st.markdown("---")
+
+            # Bagian Rekomendasi Titik Eksekusi Harga
+            st.markdown("### 💡 Rekomendasi Titik Eksekusi Harga Trading")
             col_b1, col_b2, col_b3 = st.columns(3)
-            col_b1.metric("Rekomendasi Harga Beli (Buy)", f"Rp {current_price:,.2f}", "Zona Akumulasi")
-            col_b2.metric("Target Harga Jual (Take Profit)", f"Rp {target_sell:,.2f}", f"+{((target_sell - current_price)/current_price)*100:.2f}%")
-            col_b3.metric("Batas Risiko (Stop Loss)", f"Rp {stop_loss:,.2f}", "Berbasis ATR Volatilitas")
+            col_b1.metric("Rekomendasi Harga Beli (Buy)", f"Rp {current_price:,.2f}", "Zona Akumulasi Optimal")
+            col_b2.metric("Target Harga Jual (Take Profit)", f"Rp {target_sell:,.2f}", f"+{((target_sell - current_price)/current_price)*100:.2f}% Target")
+            col_b3.metric("Batas Risiko (Stop Loss)", f"Rp {stop_loss:,.2f}", "Proteksi ATR Volatilitas")
 
-            st.subheader("🚨 Alarm Sinyal Eksekusi Trading (Beli & Jual)")
+            # Bagian Status Alarm Sinyal
+            st.markdown("### 🚨 Panel Alarm Sinyal Eksekusi")
             if "STRONG BUY" in action_signal:
                 st.success(f"""
-                🔔 **ALARM NOTIFIKASI: SAATNYA BELI (BUY)**  
-                - **Rekomendasi Aksi:** Akumulasi pembelian optimal dengan validasi Bollinger & ATR.  
-                - **Target Harga Jual (Take Profit):** Rp {target_sell:,.2f}  
-                - **Batas Risiko (Stop Loss berbasis ATR):** Rp {stop_loss:,.2f}  
-                - **Proyeksi Keuntungan:** +{pred_change:.2f}% (Akurasi Model: {accuracy_percentage:.2f}%)
+                🟢 **STATUS: STRONG BUY (WAKTU BELI UTAMA)**  
+                - **Aksi Strategis:** Akumulasi bertahap di rentang harga saat ini.  
+                - **Target Take Profit:** Rp {target_sell:,.2f} | **Stop Loss:** Rp {stop_loss:,.2f}  
+                - **Potensi Keuntungan:** +{pred_change:.2f}% (Tingkat Akurasi: {accuracy_percentage:.2f}%)
                 """)
             elif "SELL" in action_signal:
                 st.warning(f"""
-                🔔 **ALARM NOTIFIKASI: SAATNYA JUAL / TAKE PROFIT (SELL)**  
-                - **Rekomendasi Aksi:** Amankan posisi atau keluar pasar secara bertahap.  
-                - **Target Koreksi ML:** Rp {target_pred:,.2f}  
-                - **Tingkat Keyakinan Model:** {accuracy_percentage:.2f}%
+                🟠 **STATUS: SELL / TAKE PROFIT (WAKTU KELUAR)**  
+                - **Aksi Strategis:** Amankan profit atau kurangi kepemilikan saham secara bertahap.  
+                - **Target Koreksi AI:** Rp {target_pred:,.2f}  
                 """)
             else:
                 st.info(f"""
-                🔔 **ALARM NOTIFIKASI: WAIT & SEE (KONSOLIDASI)**  
-                - **Rekomendasi Aksi:** Pertahankan posisi sambil memantau rentang volatilitas pasar.  
-                - **Proyeksi Harga ({prediction_days} Hari):** Rp {target_pred:,.2f}
+                🔵 **STATUS: HOLD / WAIT & SEE (KONSOLIDASI)**  
+                - **Aksi Strategis:** Pertahankan posisi sambil menunggu sinyal momentum berikutnya.  
                 """)
 
-            st.subheader(f"📊 Grafik Perbandingan Harga Real-Time & Proyeksi AI Presisi Tinggi ({target_ticker})")
+            st.markdown("---")
+
+            # Bagian Grafik Interaktif Plotly yang Elegan
+            st.subheader(f"📈 Grafik Pergerakan & Proyeksi AI Interaktif")
             
             last_date = df.index[-1]
             if interval_val == "1d":
@@ -287,45 +317,47 @@ try:
 
             fig = go.Figure()
             
+            # Grafik Harga Aktual
             fig.add_trace(go.Scatter(
                 x=df.index, 
                 y=df['Close'], 
                 mode='lines', 
-                name='Harga Aktual (Real-Time)',
-                line=dict(color='#1f77b4', width=2)
+                name='Harga Aktual Real-Time',
+                line=dict(color='#00d2ff', width=2.5)
             ))
             
+            # Grafik Proyeksi AI
             fig.add_trace(go.Scatter(
                 x=projection_x, 
                 y=projection_y, 
                 mode='lines+markers', 
-                name=f'Proyeksi AI Presisi Tinggi ({prediction_days} Hari)',
-                line=dict(color='#2ca02c', width=3, dash='dash'),
-                marker=dict(size=9, color='#2ca02c')
+                name=f'Proyeksi AI ({prediction_days} Hari)',
+                line=dict(color='#00ff87', width=3, dash='dash'),
+                marker=dict(size=8, color='#00ff87')
             ))
             
             fig.update_layout(
-                xaxis=dict(
-                    title="Tanggal / Waktu Perdagangan",
-                    range=[df.index[0], future_dates[-1] + (pd.Timedelta(days=1) if interval_val=="1d" else pd.Timedelta(hours=2))]
-                ),
-                yaxis_title="Harga (IDR)",
+                template="plotly_dark",
+                xaxis=dict(title="Waktu Perdagangan", gridcolor="#30363d"),
+                yaxis=dict(title="Harga (IDR)", gridcolor="#30363d"),
                 hovermode="x unified",
-                margin=dict(l=20, r=20, t=20, b=20),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                margin=dict(l=10, r=10, t=10, b=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                plot_bgcolor="#0e1117",
+                paper_bgcolor="#0e1117"
             )
             
             st.plotly_chart(fig, use_container_width=True)
-            st.caption(f"🔄 Data & Sinyal Alarm diperbarui secara otomatis setiap 5 detik pada tanggal {current_date_str} pukul {current_time_str} WIB.")
+            st.caption(f"🔄 Status: Auto-refresh aktif setiap 5 detik. Pembaruan terakhir pada {current_date_str} pukul {current_time_str} WIB.")
 
     else:
-        st.warning("Data historis tidak mencukupi untuk horizon prediksi ini. Silakan pilih interval atau emiten lain.")
+        st.warning("Data historis tidak mencukupi untuk parameter yang dipilih. Silakan ubah interval atau kode emiten.")
 
 except Exception as e:
-    st.error(f"Terjadi kesalahan saat memproses model Machine Learning: {e}")
+    st.error(f"Terjadi kesalahan sistem saat memproses data: {e}")
 
 st.markdown("---")
-st.subheader("🔗 Akses Cepat Grafik & Sumber Data Lanjutan")
+st.subheader("🔗 Akses Cepat Sumber Data Eksternal")
 clean_sym = target_ticker.replace(".JK", "")
 
 c1, c2, c3, c4 = st.columns(4)
